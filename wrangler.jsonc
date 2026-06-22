@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pixeleuro",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-06-01",
+  // nodejs_compat wird vom Stripe-SDK benötigt
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Statische Dateien (Frontend, Rechtsseiten) aus public/
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // D1-Datenbank (database_id nach dem Anlegen eintragen)
+  "d1_databases": [
+    { "binding": "DB", "database_name": "pixeleuro", "database_id": "PLACEHOLDER_D1_ID" }
+  ],
+
+  // R2-Bucket für die hochgeladenen Bilder
+  "r2_buckets": [
+    { "binding": "IMAGES", "bucket_name": "pixeleuro-images" }
+  ],
+
+  // Aufräumen abgelaufener Reservierungen alle 2 Minuten
+  "triggers": { "crons": ["*/2 * * * *"] },
+
+  // Öffentliche (nicht geheime!) Konfiguration
+  "vars": {
+    "GRID_W": "500",
+    "GRID_H": "250",
+    "PIXEL_PRICE_CENTS": "100",
+    "MIN_ORDER_CENTS": "1000",
+    "RESERVATION_MINUTES": "15",
+    "SITE_NAME": "PixelEuro",
+    "SITE_TAGLINE": "1 Pixel. 1 Euro. Für immer im Netz.",
+    "PUBLIC_URL": ""
+  }
+
+  // Geheimnisse NICHT hier, sondern via `wrangler secret put`:
+  //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, ADMIN_TOKEN
+}

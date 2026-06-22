@@ -7,7 +7,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "initdb": "node src/initdb.js"
+    "initdb": "node src/initdb.js",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:initdb": "wrangler d1 execute pixeleuro --remote --file=db/schema_d1.sql",
+    "cf:initdb:local": "wrangler d1 execute pixeleuro --local --file=db/schema_d1.sql"
   },
   "engines": {
     "node": ">=20"
@@ -20,5 +24,8 @@
     "pg": "^8.12.0",
     "sharp": "^0.33.5",
     "stripe": "^16.8.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
   }
 }
