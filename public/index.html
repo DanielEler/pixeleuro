@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PixelEuro – 1 Pixel. 1 Euro. Für immer im Netz.</title>
+  <meta name="description" content="Kauf dir deinen Platz im Internet-Geschichtsbuch. 1 Pixel = 1 Euro. Sichere dir dein Stück der deutschen Pixel-Wand, bevor sie ausverkauft ist." />
+  <meta property="og:title" content="PixelEuro – 1 Pixel. 1 Euro." />
+  <meta property="og:description" content="Sichere dir dein Stück der deutschen Pixel-Wand, bevor sie für immer ausverkauft ist." />
+  <meta property="og:type" content="website" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🟦 <span id="siteName">PixelEuro</span></div>
+    <nav>
+      <a href="#wand">Die Wand</a>
+      <a href="#so-gehts">So geht's</a>
+      <a href="/legal/impressum.html">Impressum</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>1 Pixel. 1 Euro.<br /><span class="accent">Für immer im Netz.</span></h1>
+    <p class="sub" id="tagline">Sichere dir dein Stück der deutschen Pixel-Wand – bevor sie ausverkauft ist.</p>
+
+    <div class="stats">
+      <div class="stat"><b id="soldCount">–</b><span>Pixel verkauft</span></div>
+      <div class="stat"><b id="freeCount">–</b><span>noch frei</span></div>
+      <div class="stat"><b id="pricePer">1&nbsp;€</b><span>pro Pixel</span></div>
+    </div>
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+    <button class="cta" id="startBuy">🎯 Jetzt Pixel sichern</button>
+  </section>
+
+  <section id="wand" class="wall-section">
+    <div class="wall-toolbar">
+      <span class="hint" id="modeHint">Klick „Pixel sichern" und zieh ein Rechteck auf die Wand.</span>
+      <div class="zoom">
+        <button id="zoomOut">−</button>
+        <button id="zoomIn">+</button>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="grid"></canvas>
+      <div id="selection" class="selection hidden"></div>
+    </div>
+    <div id="tooltip" class="tooltip hidden"></div>
+  </section>
+
+  <section id="so-gehts" class="how">
+    <h2>So funktioniert's</h2>
+    <ol>
+      <li><b>Fläche wählen</b> – zieh ein Rechteck auf der Wand. Je größer, desto mehr fällt es auf.</li>
+      <li><b>Bild & Link hochladen</b> – dein Logo, deine Marke, dein Meme. Mit Klick-Link.</li>
+      <li><b>Sicher bezahlen</b> – über Stripe (Kreditkarte, SEPA u. a.).</li>
+      <li><b>Für immer drauf</b> – nach kurzer Prüfung erscheint dein Pixel-Block. Einmal gekauft, bleibt er.</li>
+    </ol>
+  </section>
+
+  <footer class="footer">
+    <a href="/legal/impressum.html">Impressum</a> ·
+    <a href="/legal/datenschutz.html">Datenschutz</a> ·
+    <a href="/legal/agb.html">AGB</a>
+    <p>© <span id="year"></span> PixelEuro</p>
+  </footer>
+
+  <!-- Kauf-Dialog -->
+  <div class="modal hidden" id="buyModal">
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose">✕</button>
+      <h3>Deine Pixel</h3>
+      <p class="selinfo">
+        Fläche: <b id="selSize">–</b> &nbsp;·&nbsp;
+        <b id="selPixels">0</b> Pixel &nbsp;·&nbsp;
+        Preis: <b id="selPrice">0,00 €</b>
+      </p>
+      <form id="buyForm">
+        <label>Bild / Logo (PNG, JPG – max. 3 MB)
+          <input type="file" name="image" id="imgInput" accept="image/png,image/jpeg,image/webp,image/gif" required />
+        </label>
+        <label>Link beim Klick (optional)
+          <input type="url" name="link" id="linkInput" placeholder="https://deine-seite.de" />
+        </label>
+        <label>Tooltip-Text (optional)
+          <input type="text" name="title" id="titleInput" maxlength="120" placeholder="z. B. dein Markenname" />
+        </label>
+        <label>E-Mail für den Beleg
+          <input type="email" name="email" id="emailInput" placeholder="du@beispiel.de" required />
+        </label>
+        <label class="check">
+          <input type="checkbox" id="agreeInput" required />
+          Ich akzeptiere die <a href="/legal/agb.html" target="_blank">AGB</a> &
+          <a href="/legal/datenschutz.html" target="_blank">Datenschutz</a>.
+        </label>
+        <button type="submit" class="cta" id="payBtn">Zur Zahlung →</button>
+        <p class="formerror hidden" id="formError"></p>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

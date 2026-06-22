@@ -1,0 +1,24 @@
+{
+  "name": "pixelwebsite",
+  "version": "1.0.0",
+  "description": "Die deutsche Pixel-Wand: 1 Pixel = 1 Euro",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "initdb": "node src/initdb.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.12.0",
+    "sharp": "^0.33.5",
+    "stripe": "^16.8.0"
+  }
+}

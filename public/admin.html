@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moderation – PixelEuro</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .wrap { max-width: 900px; margin: 30px auto; padding: 0 16px; }
+    .item { display: flex; gap: 16px; background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 14px; align-items: center; }
+    .item img { background: #fff; border-radius: 6px; max-width: 160px; max-height: 120px; image-rendering: pixelated; }
+    .item .meta { flex: 1; font-size: 14px; }
+    .item button { margin-right: 8px; padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+    .approve { background: var(--ok); color: #04221a; }
+    .reject { background: #ff6b6b; color: #2a0000; }
+    .tokenbar input { padding: 10px; border-radius: 8px; border: 1px solid #2a3358; background: #0e1430; color: var(--text); width: 280px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🛡️ Moderation</h1>
+    <p class="hint">Bezahlte Anzeigen prüfen und freigeben oder ablehnen. Bei Ablehnung bitte Rückerstattung manuell im Stripe-Dashboard veranlassen.</p>
+    <div class="tokenbar">
+      <input type="password" id="token" placeholder="Admin-Token eingeben" />
+      <button class="approve" id="load">Laden</button>
+    </div>
+    <div id="list" style="margin-top:20px"></div>
+  </div>
+  <script>
+    const tokenInput = document.getElementById('token');
+    document.getElementById('load').onclick = load;
+    tokenInput.value = sessionStorage.getItem('adminToken') || '';
+
+    async function load() {
+      const token = tokenInput.value.trim();
+      sessionStorage.setItem('adminToken', token);
+      const res = await fetch('/api/admin/pending', { headers: { 'x-admin-token': token } });
+      const list = document.getElementById('list');
+      if (!res.ok) { list.innerHTML = '<p class="formerror">Token ungültig.</p>'; return; }
+      const items = await res.json();
+      if (!items.length) { list.innerHTML = '<p class="hint">Keine offenen Anzeigen. 🎉</p>'; return; }
+      list.innerHTML = items.map(it => `
+        <div class="item" id="ad-${it.id}">
+          <img src="/api/admin/img/${it.id}?token=${encodeURIComponent(token)}" alt="" />
+          <div class="meta">
+            <div><b>#${it.id}</b> · ${it.w}×${it.h} (${it.w*it.h} px) · ${(it.amount_cents/100).toFixed(2)} €</div>
+            <div>Link: ${it.link ? `<a href="${it.link}" target="_blank" rel="noopener">${it.link}</a>` : '–'}</div>
+            <div>Titel: ${it.title || '–'}</div>
+            <div>E-Mail: ${it.email || '–'}</div>
+          </div>
+          <div>
+            <button class="approve" onclick="act(${it.id},'approve')">✓ Freigeben</button>
+            <button class="reject" onclick="act(${it.id},'reject')">✕ Ablehnen</button>
+          </div>
+        </div>`).join('');
+    }
+
+    async function act(id, what) {
+      const token = tokenInput.value.trim();
+      await fetch(`/api/admin/ads/${id}/${what}`, { method: 'POST', headers: { 'x-admin-token': token } });
+      document.getElementById('ad-' + id).remove();
+    }
+
+    if (tokenInput.value) load();
+  </script>
+</body>
+</html>
