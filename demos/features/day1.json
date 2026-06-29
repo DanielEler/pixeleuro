@@ -1,0 +1,39 @@
+{
+  "flow": "day1",
+  "title": { "de": "Tag 1 – sei der Erste", "en": "Day 1 – be the first" },
+  "proofStat": {
+    "value": "125.000",
+    "label": { "de": "Pixel — alle noch frei", "en": "pixels — all still free" },
+    "source": "Raster 500×250 = 125.000; Tag 1 = 0 verkauft (leere Wand)"
+  },
+  "beats": [
+    {
+      "label": "land",
+      "narration": { "de": "Tag 1. Die Wand ist leer.", "en": "Day 1. The wall is empty." },
+      "zoom": 1.0
+    },
+    {
+      "label": "stats",
+      "narration": { "de": "Hundertfünfundzwanzigtausend Pixel. Null verkauft.", "en": "125,000 pixels. Zero sold." },
+      "zoom": 1.2
+    },
+    { "label": "wall", "zoom": 1.15 },
+    {
+      "label": "select",
+      "narration": { "de": "Schnapp dir deinen Platz — ein Pixel, ein Euro.", "en": "Grab your spot — one pixel, one euro." },
+      "zoom": 1.8
+    },
+    { "label": "modal", "zoom": 1.4 },
+    { "label": "form", "zoom": 1.3 },
+    {
+      "label": "success",
+      "narration": { "de": "Sei der Erste. Für immer.", "en": "Be the first. Forever." },
+      "zoom": 1.0
+    }
+  ],
+  "outro": {
+    "kicker": { "de": "Tag 1 · jeden Tag ein Update", "en": "Day 1 · new update every day" },
+    "headline": { "de": "Sei der Erste auf der Wand.", "en": "Be the first on the wall." },
+    "url": "pixeleuro.de"
+  }
+}

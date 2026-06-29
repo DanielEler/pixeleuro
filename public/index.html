@@ -1,45 +1,57 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PixelEuro – 1 Pixel. 1 Euro. Für immer im Netz.</title>
-  <meta name="description" content="Kauf dir deinen Platz im Internet-Geschichtsbuch. 1 Pixel = 1 Euro. Sichere dir dein Stück der deutschen Pixel-Wand, bevor sie ausverkauft ist." />
+  <title>PixelEuro – 1 Pixel. 1 Euro. Forever on the internet.</title>
+  <meta name="description" content="The pixel wall: 1 pixel = 1 euro. Grab your piece of internet history – pay once, stay forever. Only 125,000 pixels, then it's gone." />
   <meta property="og:title" content="PixelEuro – 1 Pixel. 1 Euro." />
-  <meta property="og:description" content="Sichere dir dein Stück der deutschen Pixel-Wand, bevor sie für immer ausverkauft ist." />
+  <meta property="og:description" content="Grab your piece of the pixel wall before it's sold out forever." />
   <meta property="og:type" content="website" />
+  <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
+  <noscript><style>.reveal{opacity:1!important;transform:none!important}</style></noscript>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🟦 <span id="siteName">PixelEuro</span></div>
+    <div class="brand"><img src="/logo.svg" alt="PixelEuro" /><span id="siteName">PixelEuro</span></div>
     <nav>
-      <a href="#wand">Die Wand</a>
-      <a href="#so-gehts">So geht's</a>
-      <a href="/legal/impressum.html">Impressum</a>
+      <button class="nav-cta" onclick="document.getElementById('startBuy').click()">Get your pixel →</button>
     </nav>
   </header>
 
-  <section class="hero">
-    <h1>1 Pixel. 1 Euro.<br /><span class="accent">Für immer im Netz.</span></h1>
-    <p class="sub" id="tagline">Sichere dir dein Stück der deutschen Pixel-Wand – bevor sie ausverkauft ist.</p>
-
+  <!-- Compact hero -->
+  <section class="hero reveal">
+    <span class="pill"><span class="livedot"></span> Live now – the wall is still almost empty</span>
+    <img class="logo-big" src="/logo.svg" alt="PixelEuro logo" />
+    <h1>Buy your piece of the internet.<br /><span class="accent">1 pixel = 1 €. Forever.</span></h1>
+    <p class="sub" id="tagline">Grab your spot on the pixel wall – before it's sold out for good.</p>
     <div class="stats">
-      <div class="stat"><b id="soldCount">–</b><span>Pixel verkauft</span></div>
-      <div class="stat"><b id="freeCount">–</b><span>noch frei</span></div>
-      <div class="stat"><b id="pricePer">1&nbsp;€</b><span>pro Pixel</span></div>
+      <div class="stat"><b id="soldCount">–</b><span>pixels sold</span></div>
+      <div class="stat"><b id="freeCount">–</b><span>still free</span></div>
+      <div class="stat"><b id="pricePer">1&nbsp;€</b><span>per pixel</span></div>
     </div>
     <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-
-    <button class="cta" id="startBuy">🎯 Jetzt Pixel sichern</button>
+    <button class="cta" id="startBuy">Grab your spot →</button>
+    <p class="microtrust">Secure payment via Stripe · from 1 € · pay once, stay forever</p>
   </section>
 
-  <section id="wand" class="wall-section">
+  <!-- THE WALL = the main thing -->
+  <section id="wand" class="wall-section reveal">
+    <h2 class="section-title">The wall – live</h2>
+    <p class="section-sub">Click "Get your pixel" and drag a rectangle. Each block is sold only once.</p>
     <div class="wall-toolbar">
-      <span class="hint" id="modeHint">Klick „Pixel sichern" und zieh ein Rechteck auf die Wand.</span>
+      <div class="mode-switch" id="modeSwitch" role="group" aria-label="Wall mode">
+        <button id="modeSelect" type="button" class="active">✏️ Select</button>
+        <button id="modeMove" type="button">✋ Move</button>
+      </div>
+      <span class="hint" id="modeHint">Drag across the wall to pick your pixels.</span>
       <div class="zoom">
-        <button id="zoomOut">−</button>
-        <button id="zoomIn">+</button>
+        <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+        <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
       </div>
     </div>
     <div class="canvas-wrap" id="canvasWrap">
@@ -47,59 +59,93 @@
       <div id="selection" class="selection hidden"></div>
     </div>
     <div id="tooltip" class="tooltip hidden"></div>
+    <div id="selBadge" class="sel-badge hidden"></div>
+    <div class="wall-cta">
+      <button class="cta" onclick="document.getElementById('startBuy').click()">Get my pixel now →</button>
+    </div>
   </section>
 
-  <section id="so-gehts" class="how">
-    <h2>So funktioniert's</h2>
+  <section id="so-gehts" class="how reveal">
+    <h2 class="section-title">How it works</h2>
     <ol>
-      <li><b>Fläche wählen</b> – zieh ein Rechteck auf der Wand. Je größer, desto mehr fällt es auf.</li>
-      <li><b>Bild & Link hochladen</b> – dein Logo, deine Marke, dein Meme. Mit Klick-Link.</li>
-      <li><b>Sicher bezahlen</b> – über Stripe (Kreditkarte, SEPA u. a.).</li>
-      <li><b>Für immer drauf</b> – nach kurzer Prüfung erscheint dein Pixel-Block. Einmal gekauft, bleibt er.</li>
+      <li><b>Pick an area</b> – drag a rectangle on the wall. The bigger, the more it stands out.</li>
+      <li><b>Upload image & link</b> – your logo, your brand, your meme. With a click-through link.</li>
+      <li><b>Pay securely</b> – via Stripe (card, SEPA & more). From 1 €.</li>
+      <li><b>Stay forever</b> – after a short review your pixel block appears. Once bought, it stays.</li>
     </ol>
   </section>
 
+  <section class="reverse reveal">
+    <h2 class="section-title">Don't buy a pixel here if…</h2>
+    <ul class="reverse-list">
+      <li>…you don't care whether your name is still on the internet in 10 years.</li>
+      <li>…you'd rather watch others grab the best spots.</li>
+      <li>…<b>1 euro</b> is too much for something that never disappears again.</li>
+    </ul>
+    <p class="reverse-flip">Everyone else: the wall is filling up right now. Grab the spot that exists only <b>once</b>.</p>
+    <button class="cta" onclick="document.getElementById('startBuy').click()">Get your pixel →</button>
+  </section>
+
+  <section class="faq reveal">
+    <h2 class="section-title">Short & honest</h2>
+    <details><summary>Is this for real?</summary><p>Yes. Payment runs through Stripe, and after a short review your image goes permanently on the wall – visible to everyone who visits pixeleuro.de.</p></details>
+    <details><summary>What does it cost me?</summary><p>1 € per pixel, from a single pixel. One-time – no subscription, no hidden costs.</p></details>
+    <details><summary>What can I upload?</summary><p>Your logo, your brand, an image with a link. Offensive or illegal content is rejected before approval.</p></details>
+    <details><summary>Does it really stay forever?</summary><p>As long as PixelEuro is online – and that's exactly the plan. No expiry date, no renewal needed.</p></details>
+  </section>
+
+  <section class="finalcta reveal">
+    <h2>The wall will never get bigger.</h2>
+    <p>125,000 pixels. Once your spot is gone, it's gone – forever.</p>
+    <button class="cta cta-lg" onclick="document.getElementById('startBuy').click()">Grab your pixel now →</button>
+  </section>
+
   <footer class="footer">
-    <a href="/legal/impressum.html">Impressum</a> ·
-    <a href="/legal/datenschutz.html">Datenschutz</a> ·
-    <a href="/legal/agb.html">AGB</a>
+    <a href="/legal/impressum.html">Imprint</a> ·
+    <a href="/legal/datenschutz.html">Privacy</a> ·
+    <a href="/legal/agb.html">Terms</a>
     <p>© <span id="year"></span> PixelEuro</p>
   </footer>
 
-  <!-- Kauf-Dialog -->
   <div class="modal hidden" id="buyModal">
     <div class="modal-box">
       <button class="modal-close" id="modalClose">✕</button>
-      <h3>Deine Pixel</h3>
+      <h3>Your pixels</h3>
       <p class="selinfo">
-        Fläche: <b id="selSize">–</b> &nbsp;·&nbsp;
-        <b id="selPixels">0</b> Pixel &nbsp;·&nbsp;
-        Preis: <b id="selPrice">0,00 €</b>
+        Area: <b id="selSize">–</b> &nbsp;·&nbsp;
+        <b id="selPixels">0</b> pixels &nbsp;·&nbsp;
+        Price: <b id="selPrice">0.00 €</b>
       </p>
       <form id="buyForm">
-        <label>Bild / Logo (PNG, JPG – max. 3 MB)
+        <label>Image / logo (PNG, JPG – max. 3 MB)
           <input type="file" name="image" id="imgInput" accept="image/png,image/jpeg,image/webp,image/gif" required />
         </label>
-        <label>Link beim Klick (optional)
-          <input type="url" name="link" id="linkInput" placeholder="https://deine-seite.de" />
+        <label>Click-through link (optional)
+          <input type="url" name="link" id="linkInput" placeholder="https://your-site.com" />
         </label>
-        <label>Tooltip-Text (optional)
-          <input type="text" name="title" id="titleInput" maxlength="120" placeholder="z. B. dein Markenname" />
+        <label>Tooltip text (optional)
+          <input type="text" name="title" id="titleInput" maxlength="120" placeholder="e.g. your brand name" />
         </label>
-        <label>E-Mail für den Beleg
-          <input type="email" name="email" id="emailInput" placeholder="du@beispiel.de" required />
+        <label>Email for the receipt
+          <input type="email" name="email" id="emailInput" placeholder="you@example.com" required />
         </label>
         <label class="check">
           <input type="checkbox" id="agreeInput" required />
-          Ich akzeptiere die <a href="/legal/agb.html" target="_blank">AGB</a> &
-          <a href="/legal/datenschutz.html" target="_blank">Datenschutz</a>.
+          I accept the <a href="/legal/agb.html" target="_blank">Terms</a> &
+          <a href="/legal/datenschutz.html" target="_blank">Privacy Policy</a>.
         </label>
-        <button type="submit" class="cta" id="payBtn">Zur Zahlung →</button>
+        <button type="submit" class="cta" id="payBtn">Continue to payment →</button>
         <p class="formerror hidden" id="formError"></p>
       </form>
     </div>
   </div>
 
+  <script>
+    addEventListener('DOMContentLoaded', () => {
+      const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+      document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+    });
+  </script>
   <script src="/app.js"></script>
 </body>
 </html>

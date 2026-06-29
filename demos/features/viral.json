@@ -1,0 +1,51 @@
+{
+  "flow": "viral",
+  "title": { "de": "Million-Dollar-Hook", "en": "Million dollar hook" },
+  "note": "Fakten echt: Alex Tew, 2005, Million Dollar Homepage, 1.000.000 Pixel à 1 $, ~1 Mio. $, Seite bis heute online.",
+  "beats": [
+    {
+      "label": "hook1",
+      "narration": {
+        "de": "Zweitausendfünf verkaufte ein Student eine Million Pixel.",
+        "en": "In 2005, a broke student sold a million pixels."
+      },
+      "big": { "de": "1.000.000 PIXEL", "en": "1,000,000 PIXELS" },
+      "sub": { "de": "2005", "en": "2005" }
+    },
+    {
+      "label": "hook2",
+      "narration": {
+        "de": "Für einen Dollar das Stück — und machte über eine Million Dollar.",
+        "en": "One dollar each — and he made over a million dollars."
+      },
+      "big": { "de": "1.000.000 $", "en": "$1,000,000" },
+      "sub": { "de": "wahre Geschichte", "en": "true story" }
+    },
+    {
+      "label": "twist",
+      "narration": {
+        "de": "Zwanzig Jahre später mache ich es nach.",
+        "en": "Twenty years later, I'm doing it again."
+      },
+      "big": { "de": "ICH MACH'S NACH", "en": "I'M DOING IT AGAIN" }
+    },
+    {
+      "label": "product",
+      "narration": {
+        "de": "Hundertfünfundzwanzigtausend Pixel. Ein Euro das Stück. Für immer.",
+        "en": "125,000 pixels. One euro each. Yours forever."
+      },
+      "big": { "de": "1 PIXEL = 1 €", "en": "1 PIXEL = 1 €" },
+      "sub": { "de": "für immer", "en": "forever" }
+    },
+    {
+      "label": "cta",
+      "narration": {
+        "de": "Tag eins. Die Wand ist leer. Sei der Erste.",
+        "en": "Day one. The wall is empty. Be the first."
+      },
+      "big": { "de": "SEI DER ERSTE", "en": "BE THE FIRST" },
+      "sub": { "de": "pixeleuro.de", "en": "pixeleuro.de" }
+    }
+  ]
+}

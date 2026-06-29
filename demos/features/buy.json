@@ -1,0 +1,76 @@
+{
+  "flow": "buy",
+  "title": { "de": "Sichere dir deinen Pixel", "en": "Claim your pixel" },
+  "proofStat": {
+    "value": "125.000",
+    "label": { "de": "Pixel — einmal, dann nie wieder", "en": "pixels — once, then never again" },
+    "source": "Raster 500×250 = 125.000 (public/index.html, src/server.js GRID_W×GRID_H)"
+  },
+  "pricePoint": {
+    "value": "1 €",
+    "label": { "de": "pro Pixel · einmal zahlen", "en": "per pixel · pay once" }
+  },
+  "beats": [
+    {
+      "label": "land",
+      "narration": {
+        "de": "Das hier ist die Pixel-Wand.",
+        "en": "This is the pixel wall."
+      },
+      "zoom": 1.0
+    },
+    {
+      "label": "stats",
+      "narration": {
+        "de": "Hundertfünfundzwanzigtausend Pixel — und jeder kostet nur einen Euro.",
+        "en": "125,000 pixels — and each one is just one euro."
+      },
+      "zoom": 1.25
+    },
+    {
+      "label": "wall",
+      "narration": {
+        "de": "Such dir eine freie Fläche.",
+        "en": "Pick any free spot."
+      },
+      "zoom": 1.15
+    },
+    {
+      "label": "select",
+      "narration": {
+        "de": "Zieh ein Rechteck — das ist dein Platz.",
+        "en": "Drag a rectangle — that's your spot."
+      },
+      "zoom": 1.9
+    },
+    {
+      "label": "modal",
+      "narration": {
+        "de": "Dein Bild, dein Link — fertig.",
+        "en": "Add your image and link — done."
+      },
+      "zoom": 1.35
+    },
+    {
+      "label": "form",
+      "narration": {
+        "de": "Und jeden Tag poste ich ein neues Update der Wand.",
+        "en": "And every single day, I post a new update of the wall."
+      },
+      "zoom": 1.3
+    },
+    {
+      "label": "success",
+      "narration": {
+        "de": "Also sichere dir deinen Platz — bevor er für immer weg ist.",
+        "en": "So grab your spot now — before it's gone forever."
+      },
+      "zoom": 1.0
+    }
+  ],
+  "outro": {
+    "kicker": { "de": "Jeden Tag ein neues Wand-Update", "en": "New wall update every day" },
+    "headline": { "de": "1 Pixel. 1 Euro. Für immer.", "en": "1 pixel. 1 euro. Forever." },
+    "url": "pixeleuro.de"
+  }
+}

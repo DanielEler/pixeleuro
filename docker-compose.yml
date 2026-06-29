@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# PixelEuro — läuft NEBEN Semesto auf demselben Hetzner-Server.
+#
+#  • Eigene PostgreSQL-DB (Container `pixeleuro-db`, eigenes Volume) — Semestos
+#    DB wird NICHT angefasst.
+#  • Eigener App-Container (`pixeleuro`, Port 3000 nur intern).
+#  • Der App-Container hängt zusätzlich im Caddy-Netz von Semesto (`edge`,
+#    extern), damit Semestos vorhandene Caddy ihn als `pixeleuro:3000`
+#    reverse-proxyen kann. KEIN eigener Webserver, keine Port-Kollision mit
+#    Semesto (80/443 gehören weiterhin Semestos Caddy).
+#
+# Start (auf dem Server, NACH Semesto):  docker compose up -d --build
+# ═══════════════════════════════════════════════════════════════════════════
+services:
+  pixeleuro:
+    build: .
+    container_name: pixeleuro
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # DB zeigt auf den Sidecar-Container (überschreibt evtl. Wert aus .env)
+      - DATABASE_URL=postgres://pixel:${PIXEL_DB_PASSWORD}@pixeleuro-db:5432/pixelwebsite
+    depends_on:
+      pixeleuro-db:
+        condition: service_healthy
+    networks:
+      - internal
+      - edge
+
+  pixeleuro-db:
+    image: postgres:16-alpine
+    container_name: pixeleuro-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pixelwebsite
+      POSTGRES_USER: pixel
+      POSTGRES_PASSWORD: ${PIXEL_DB_PASSWORD}
+    volumes:
+      - pixeleuro_pgdata:/var/lib/postgresql/data
+      # Schema wird beim ERSTEN Start automatisch eingespielt
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pixel -d pixelwebsite"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+
+networks:
+  # Privates Netz nur für App <-> eigene DB
+  internal:
+  # Geteiltes Netz mit Semestos Caddy (extern, wird vom Deploy-Skript gesetzt)
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-semesto_default}
+
+volumes:
+  pixeleuro_pgdata:

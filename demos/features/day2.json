@@ -1,0 +1,30 @@
+{
+  "flow": "day2",
+  "title": { "de": "Tag 2", "en": "Day 2" },
+  "note": "Keine erfundenen Verkaufszahlen — Fokus: Mobil-Auswahl + Knappheit.",
+  "beats": [
+    {
+      "label": "d2",
+      "narration": { "de": "Tag zwei — und die Wand ist noch weit offen.", "en": "Day 2 — and the wall is still wide open." },
+      "big": { "de": "TAG 2", "en": "DAY 2" }
+    },
+    {
+      "label": "pick",
+      "narration": { "de": "Hundertfünfundzwanzigtausend Pixel, ein Euro das Stück. Schnapp dir einen Block — direkt vom Handy.", "en": "125,000 pixels, one euro each. Grab any block — right from your phone." },
+      "big": { "de": "1 PIXEL = 1 €", "en": "1 PIXEL = 1 €" },
+      "sub": { "de": "schnapp dir einen Block", "en": "grab any block" }
+    },
+    {
+      "label": "scarcity",
+      "narration": { "de": "Einmal weg, ist für immer weg.", "en": "Once a pixel's gone, it's gone forever." },
+      "big": { "de": "WEG = WEG", "en": "GONE = GONE" },
+      "sub": { "de": "für immer", "en": "forever" }
+    },
+    {
+      "label": "cta",
+      "narration": { "de": "Sei früh dran.", "en": "Get in early." },
+      "big": { "de": "SEI FRÜH DRAN", "en": "BE EARLY" },
+      "sub": { "de": "pixeleuro.de", "en": "pixeleuro.de" }
+    }
+  ]
+}

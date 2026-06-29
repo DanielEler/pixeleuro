@@ -1,0 +1,10 @@
+# Secrets — niemals committen
+.env
+
+# Generierte Artefakte
+node_modules/
+out/
+tts/cache/
+**/capture-*/
+*.mp4
+*.webm

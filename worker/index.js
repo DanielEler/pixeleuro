@@ -141,20 +141,20 @@ async function handleOrder(request, env, C) {
   const file = form.get('image');
 
   if (x === null || y === null || w === null || h === null)
-    return json({ error: 'Ungültige Auswahl.' }, 400);
+    return json({ error: 'Invalid selection.' }, 400);
   if (x + w > C.gridW || y + h > C.gridH)
-    return json({ error: 'Auswahl liegt außerhalb des Rasters.' }, 400);
+    return json({ error: 'Selection is outside the grid.' }, 400);
   if (!file || typeof file.arrayBuffer !== 'function')
-    return json({ error: 'Bitte ein Bild hochladen.' }, 400);
+    return json({ error: 'Please upload an image.' }, 400);
   if (file.size > 3 * 1024 * 1024)
-    return json({ error: 'Bild zu groß (max. 3 MB).' }, 400);
+    return json({ error: 'Image too large (max. 3 MB).' }, 400);
   if (link && !/^https?:\/\/.+/i.test(link))
-    return json({ error: 'Link muss mit http:// oder https:// beginnen.' }, 400);
+    return json({ error: 'Link must start with http:// or https://.' }, 400);
 
   const pixels = w * h;
   const amount = pixels * C.pricePerPixel;
   if (amount < C.minOrderCents)
-    return json({ error: `Mindestbestellwert ${(C.minOrderCents / 100).toFixed(2)} € – bitte mehr Pixel wählen.` }, 400);
+    return json({ error: `Minimum order ${(C.minOrderCents / 100).toFixed(2)} € – please choose more pixels.` }, 400);
 
   // Überschneidung prüfen
   const overlap = await env.DB.prepare(
@@ -164,7 +164,7 @@ async function handleOrder(request, env, C) {
         AND NOT (?1 + ?3 <= x OR x + w <= ?1 OR ?2 + ?4 <= y OR y + h <= ?2)
       LIMIT 1`
   ).bind(x, y, w, h).first();
-  if (overlap) return json({ error: 'Diese Fläche ist leider schon vergeben.' }, 409);
+  if (overlap) return json({ error: 'Sorry, this area is already taken.' }, 409);
 
   // Bild in R2 ablegen
   const imageKey = crypto.randomUUID();

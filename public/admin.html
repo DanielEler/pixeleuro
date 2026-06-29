@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -19,10 +19,10 @@
 <body>
   <div class="wrap">
     <h1>🛡️ Moderation</h1>
-    <p class="hint">Bezahlte Anzeigen prüfen und freigeben oder ablehnen. Bei Ablehnung bitte Rückerstattung manuell im Stripe-Dashboard veranlassen.</p>
+    <p class="hint">Review paid advertisements and approve or reject them. For rejections, please issue the refund manually in the Stripe dashboard.</p>
     <div class="tokenbar">
-      <input type="password" id="token" placeholder="Admin-Token eingeben" />
-      <button class="approve" id="load">Laden</button>
+      <input type="password" id="token" placeholder="Enter admin token" />
+      <button class="approve" id="load">Load</button>
     </div>
     <div id="list" style="margin-top:20px"></div>
   </div>
@@ -36,21 +36,21 @@
       sessionStorage.setItem('adminToken', token);
       const res = await fetch('/api/admin/pending', { headers: { 'x-admin-token': token } });
       const list = document.getElementById('list');
-      if (!res.ok) { list.innerHTML = '<p class="formerror">Token ungültig.</p>'; return; }
+      if (!res.ok) { list.innerHTML = '<p class="formerror">Invalid token.</p>'; return; }
       const items = await res.json();
-      if (!items.length) { list.innerHTML = '<p class="hint">Keine offenen Anzeigen. 🎉</p>'; return; }
+      if (!items.length) { list.innerHTML = '<p class="hint">No pending advertisements. 🎉</p>'; return; }
       list.innerHTML = items.map(it => `
         <div class="item" id="ad-${it.id}">
           <img src="/api/admin/img/${it.id}?token=${encodeURIComponent(token)}" alt="" />
           <div class="meta">
             <div><b>#${it.id}</b> · ${it.w}×${it.h} (${it.w*it.h} px) · ${(it.amount_cents/100).toFixed(2)} €</div>
             <div>Link: ${it.link ? `<a href="${it.link}" target="_blank" rel="noopener">${it.link}</a>` : '–'}</div>
-            <div>Titel: ${it.title || '–'}</div>
-            <div>E-Mail: ${it.email || '–'}</div>
+            <div>Title: ${it.title || '–'}</div>
+            <div>Email: ${it.email || '–'}</div>
           </div>
           <div>
-            <button class="approve" onclick="act(${it.id},'approve')">✓ Freigeben</button>
-            <button class="reject" onclick="act(${it.id},'reject')">✕ Ablehnen</button>
+            <button class="approve" onclick="act(${it.id},'approve')">✓ Approve</button>
+            <button class="reject" onclick="act(${it.id},'reject')">✕ Reject</button>
           </div>
         </div>`).join('');
     }

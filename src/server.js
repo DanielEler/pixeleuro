@@ -23,7 +23,7 @@ const CFG = {
   reservationMin: Number(process.env.RESERVATION_MINUTES || 15),
   adminToken: process.env.ADMIN_TOKEN || '',
   siteName: process.env.SITE_NAME || 'PixelEuro',
-  siteTagline: process.env.SITE_TAGLINE || '1 Pixel. 1 Euro.',
+  siteTagline: process.env.SITE_TAGLINE || '1 pixel. 1 euro.',
 };
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -37,7 +37,7 @@ let sharp = null;
 try {
   sharp = (await import('sharp')).default;
 } catch (err) {
-  console.warn('⚠️  sharp nicht verfügbar – Bilder werden ohne serverseitige Skalierung gespeichert.');
+  console.warn('⚠️  sharp not available – images are stored without server-side scaling.');
 }
 
 const app = express();
@@ -54,7 +54,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error('Webhook-Signatur ungültig:', err.message);
+    console.error('Invalid webhook signature:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -67,9 +67,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
          WHERE stripe_session_id = $1 AND status = 'reserved'`,
         [session.id, session.customer_details?.email || null]
       );
-      console.log('✅ Zahlung bestätigt für Session', session.id);
+      console.log('✅ Payment confirmed for session', session.id);
     } catch (err) {
-      console.error('Fehler beim Verbuchen der Zahlung:', err);
+      console.error('Error recording payment:', err);
     }
   }
   res.json({ received: true });
@@ -101,7 +101,7 @@ async function releaseExpired() {
        WHERE status = 'reserved' AND reserved_until < now()`
     );
   } catch (err) {
-    console.error('Cleanup-Fehler:', err.message);
+    console.error('Cleanup error:', err.message);
   }
 }
 setInterval(releaseExpired, 60 * 1000);
@@ -139,11 +139,18 @@ app.get('/api/ads', async (req, res) => {
     link: r.status === 'active' ? r.link : null,
     image: r.status === 'active' ? `/img/${r.id}` : null,
   }));
-  const soldPixels = ads.reduce((s, a) => s + a.w * a.h, 0);
+  // Nur TATSÄCHLICH verkaufte Pixel zählen (bezahlt/aktiv). Reservierte
+  // (im Checkout, noch nicht bezahlt) blockieren die Fläche, gelten aber
+  // NICHT als "verkauft" — sonst zeigt ein Zahlungsabbruch fälschlich
+  // verkaufte Pixel an.
+  const soldPixels = rows.reduce(
+    (s, r) => s + ((r.status === 'active' || r.status === 'paid') ? r.w * r.h : 0),
+    0
+  );
   res.json({ ads, soldPixels, totalPixels: CFG.gridW * CFG.gridH });
   } catch (err) {
-    console.error('Fehler bei /api/ads:', err.message);
-    res.status(500).json({ error: 'Datenbank nicht erreichbar.' });
+    console.error('Error in /api/ads:', err.message);
+    res.status(500).json({ error: 'Database unavailable.' });
   }
 });
 
@@ -166,7 +173,7 @@ app.get('/img/:id', async (req, res) => {
 // ---------- API: Bestellung anlegen + Stripe-Checkout starten ----------
 app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) => {
   try {
-    if (!stripe) return res.status(503).json({ error: 'Zahlung ist nicht konfiguriert.' });
+    if (!stripe) return res.status(503).json({ error: 'Payment is not configured.' });
 
     const x = clampInt(req.body.x, 0, CFG.gridW - 1);
     const y = clampInt(req.body.y, 0, CFG.gridH - 1);
@@ -177,18 +184,18 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
     const email = (req.body.email || '').trim().slice(0, 200);
 
     if (x === null || y === null || w === null || h === null)
-      return res.status(400).json({ error: 'Ungültige Auswahl.' });
+      return res.status(400).json({ error: 'Invalid selection.' });
     if (x + w > CFG.gridW || y + h > CFG.gridH)
-      return res.status(400).json({ error: 'Auswahl liegt außerhalb des Rasters.' });
-    if (!req.file) return res.status(400).json({ error: 'Bitte ein Bild hochladen.' });
+      return res.status(400).json({ error: 'Selection is outside the grid.' });
+    if (!req.file) return res.status(400).json({ error: 'Please upload an image.' });
     if (link && !/^https?:\/\/.+/i.test(link))
-      return res.status(400).json({ error: 'Link muss mit http:// oder https:// beginnen.' });
+      return res.status(400).json({ error: 'Link must start with http:// or https://.' });
 
     const pixels = w * h;
     const amount = pixels * CFG.pricePerPixel;
     if (amount < CFG.minOrderCents)
       return res.status(400).json({
-        error: `Mindestbestellwert ${(CFG.minOrderCents / 100).toFixed(2)} € – bitte mehr Pixel wählen.`,
+        error: `Minimum order ${(CFG.minOrderCents / 100).toFixed(2)} € – please choose more pixels.`,
       });
 
     // Bild exakt auf die Rechteckgröße bringen (PNG, in DB gespeichert).
@@ -197,10 +204,21 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
     let imageMime = req.file.mimetype || 'image/png';
     if (sharp) {
       try {
-        imageBuf = await sharp(req.file.buffer).resize(w, h, { fit: 'fill' }).png().toBuffer();
+        // failOn:'none' -> sharp bricht nicht bei harmlosen Warnungen ab
+        // (z. B. ICC-/Profil-Eigenheiten von macOS-Screenshots).
+        // .rotate() berücksichtigt die EXIF-Orientierung.
+        imageBuf = await sharp(req.file.buffer, { failOn: 'none' })
+          .rotate()
+          .resize(w, h, { fit: 'fill' })
+          .png()
+          .toBuffer();
         imageMime = 'image/png';
-      } catch {
-        return res.status(400).json({ error: 'Bild konnte nicht verarbeitet werden.' });
+      } catch (err) {
+        // Robust statt hart abbrechen: Original speichern (Browser skaliert es
+        // beim Zeichnen). So scheitert der Kauf nie an der Bildverarbeitung.
+        console.error('sharp processing failed, storing original image:', err);
+        imageBuf = req.file.buffer;
+        imageMime = req.file.mimetype || 'image/png';
       }
     }
 
@@ -213,19 +231,19 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
         `SELECT 1 FROM ads
           WHERE (status = 'active' OR status = 'paid'
                  OR (status = 'reserved' AND reserved_until > now()))
-            AND NOT ($1 + $3 <= x OR x + w <= $1
-                  OR $2 + $4 <= y OR y + h <= $2)
+            AND NOT ($1::int + $3::int <= x OR x + w <= $1::int
+                  OR $2::int + $4::int <= y OR y + h <= $2::int)
           FOR UPDATE`,
         [x, y, w, h]
       );
       if (overlap.rows.length) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Diese Fläche ist leider schon vergeben.' });
+        return res.status(409).json({ error: 'Sorry, this area is already taken.' });
       }
       const ins = await client.query(
         `INSERT INTO ads (x, y, w, h, link, title, email, image, image_mime, amount_cents,
                           status, reserved_until)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'reserved', now() + ($11 || ' minutes')::interval)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'reserved', now() + ($11::int * interval '1 minute'))
          RETURNING id`,
         [x, y, w, h, link || null, title || null, email || null, imageBuf, imageMime, amount,
           String(CFG.reservationMin)]
@@ -248,22 +266,35 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
           currency: 'eur',
           unit_amount: amount,
           product_data: {
-            name: `${pixels} Pixel auf ${CFG.siteName}`,
-            description: `Position ${x},${y} · Größe ${w}×${h}`,
+            name: `${pixels} pixels on ${CFG.siteName}`,
+            description: `Position ${x},${y} · Size ${w}×${h}`,
           },
         },
       }],
       customer_email: email || undefined,
       success_url: `${CFG.publicUrl}/?success=1`,
-      cancel_url: `${CFG.publicUrl}/?canceled=1`,
+      cancel_url: `${CFG.publicUrl}/?canceled=1&ad=${adId}`,
       metadata: { adId: String(adId) },
     });
 
     await query(`UPDATE ads SET stripe_session_id = $1 WHERE id = $2`, [session.id, adId]);
     res.json({ checkoutUrl: session.url });
   } catch (err) {
-    console.error('Bestellfehler:', err);
-    res.status(500).json({ error: 'Interner Fehler. Bitte später erneut versuchen.' });
+    console.error('Order error:', err);
+    res.status(500).json({ error: 'Internal error. Please try again later.' });
+  }
+});
+
+// ---------- API: Reservierung sofort freigeben (Checkout abgebrochen) ----------
+// Gibt NUR unbezahlte Reservierungen frei; bezahlte/aktive bleiben unberührt.
+app.post('/api/orders/release', async (req, res) => {
+  try {
+    const adId = clampInt(req.body.adId, 1, Number.MAX_SAFE_INTEGER);
+    if (!adId) return res.status(400).json({ error: 'Invalid id.' });
+    await query(`UPDATE ads SET status = 'expired' WHERE id = $1 AND status = 'reserved'`, [adId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal error.' });
   }
 });
 
@@ -273,7 +304,7 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
 function requireAdmin(req, res, next) {
   const token = req.headers['x-admin-token'] || req.query.token;
   if (!CFG.adminToken || token !== CFG.adminToken)
-    return res.status(401).json({ error: 'Nicht autorisiert.' });
+    return res.status(401).json({ error: 'Not authorized.' });
   next();
 }
 
@@ -308,7 +339,7 @@ app.post('/api/admin/ads/:id/reject', requireAdmin, async (req, res) => {
 
 // ---------- Start ----------
 app.listen(CFG.port, () => {
-  console.log(`\n🟦 ${CFG.siteName} läuft auf ${CFG.publicUrl}`);
-  console.log(`   Raster ${CFG.gridW}×${CFG.gridH} = ${CFG.gridW * CFG.gridH} Pixel`);
-  console.log(`   Zahlung: ${stripe ? 'aktiv (Stripe)' : 'NICHT konfiguriert'}`);
+  console.log(`\n🟦 ${CFG.siteName} running on ${CFG.publicUrl}`);
+  console.log(`   Grid ${CFG.gridW}×${CFG.gridH} = ${CFG.gridW * CFG.gridH} pixels`);
+  console.log(`   Payment: ${stripe ? 'active (Stripe)' : 'NOT configured'}`);
 });

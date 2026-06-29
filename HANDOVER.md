@@ -54,7 +54,31 @@ Cloudflare-Variante ist nur Backup.
 4. Der User hat den Server zwischenzeitlich **neu aufgesetzt (Rebuild → Ubuntu 24.04)** –
    Server ist jetzt **leer** (Semesto ggf. neu zu deployen).
 
-**Aktueller Zustand:** Pause. User entscheidet, wie weiter.
+**Aktueller Zustand (Update 2026-06-23):** Turnkey gebaut. PixelEuro läuft jetzt
+containerisiert **neben** Semesto auf demselben Server, hinter **derselben Caddy**.
+
+### ✅ Ein-Kommando-Deploy (vom EIGENEN Terminal, NICHT in Claude Code)
+```bash
+cd /Users/danieleler/GitHub/Pixelwebsite
+bash scripts/deploy-both.sh
+```
+Das Skript: (1) deployt Semesto via dessen `scripts/remote-deploy.sh` (unverändert) und
+lädt dabei die erweiterte `Caddyfile` hoch, (2) lädt PixelEuro per rsync hoch + erzeugt
+die `.env` aus `deploy.env`, (3) baut/startet den PixelEuro-Stack (eigener Container +
+eigene Postgres-DB `pixelwebsite`, im Caddy-Netz von Semesto), (4) lädt Caddy neu.
+
+**Warum nicht aus Claude heraus:** Diese Umgebung geht über IP `185.74.219.153` raus —
+genau die von Hetzner für Port 22 gesperrte IP — und kann den 1Password-SSH-Agent nicht
+zum Signieren bewegen. Vom Terminal des Users klappt beides.
+
+**Neue Dateien (PixelEuro-Repo):** `Dockerfile`, `.dockerignore`, `docker-compose.yml`,
+`deploy.env` (prefilled, gitignored), `deploy.env.example`, `scripts/deploy-both.sh`.
+**Semesto-Repo:** nur `Caddyfile` erweitert (vhost `pixeleuro.de`, additiv — Semesto-Dienste unangetastet).
+
+**Noch offen vor „echt live":**
+- **DNS:** `pixeleuro.de` + `www.pixeleuro.de` A-Record → `159.69.184.92` (sonst kein TLS/keine Erreichbarkeit).
+- **Stripe:** Keys in `deploy.env` eintragen (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) + Webhook auf `https://pixeleuro.de/api/webhook`. Ohne Keys läuft die Seite, Zahlung ist nur deaktiviert.
+- **Semesto:** `RESEND_API_KEY` in `secrets/deploy.env` (sonst keine Verify-/Reset-Mails).
 
 ---
 

@@ -1,0 +1,58 @@
+name: Deploy PixelEuro
+
+# Push nach master (oder manuell) -> GitHub-Runner (im Rechenzentrum) deployt
+# auf Hetzner. Läuft NICHT durch dein Firmennetz -> Port-22-Block egal.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'public/**'
+      - 'src/**'
+      - 'db/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: {}   # manueller "Run workflow"-Button
+
+concurrency:
+  group: deploy-pixeleuro
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: SSH-Key einrichten
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # Nur den App-Code hochladen. WICHTIG: .env / deploy.env werden NICHT
+      # übertragen -> die Live-Secrets auf dem Server bleiben unberührt.
+      - name: Code hochladen (rsync)
+        run: |
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            Dockerfile .dockerignore docker-compose.yml package.json package-lock.json \
+            src public db \
+            "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:/home/semesto/PixelEuro/"
+
+      - name: Container neu bauen + starten
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}" \
+            'cd /home/semesto/PixelEuro && docker compose up -d --build && docker compose ps'
+
+      - name: Health-Check (intern)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}" \
+            'cd /home/semesto/PixelEuro && docker compose exec -T pixeleuro node -e "fetch(\"http://localhost:3000/api/config\").then(r=>{if(!r.ok)process.exit(1);console.log(\"OK\")}).catch(()=>process.exit(1))"'

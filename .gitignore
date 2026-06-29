@@ -1,6 +1,9 @@
 node_modules/
 .env
 .env.local
+deploy.env
 *.log
 .DS_Store
 dist/
+.hetzner-token
+.console-command.txt

@@ -1,0 +1,17 @@
+import { chromium, devices } from 'playwright';
+import http from 'node:http'; import { promises as fs } from 'node:fs'; import { createReadStream } from 'node:fs';
+import { fileURLToPath } from 'node:url'; import { dirname, join, extname } from 'node:path';
+import { installMocks } from './mock.mjs';
+const __d = dirname(fileURLToPath(import.meta.url)); const PUB = join(__d, '..', '..', 'public');
+const M = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json' };
+const s = http.createServer(async (rq, rs) => { try { let p = decodeURIComponent(rq.url.split('?')[0]); if (p === '/') p = '/index.html'; const f = join(PUB, p); await fs.access(f); rs.writeHead(200, { 'Content-Type': M[extname(f)] || 'application/octet-stream' }); createReadStream(f).pipe(rs); } catch { rs.writeHead(404).end(); } });
+await new Promise(r => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
+const b = await chromium.launch(); const c = await b.newContext({ ...devices['iPhone 13'] }); const pg = await c.newPage();
+await installMocks(pg, { empty: true }); await pg.goto(base + '/', { waitUntil: 'networkidle' }); await pg.waitForTimeout(600);
+await pg.locator('#wand').scrollIntoViewIfNeeded(); await pg.waitForTimeout(400);
+const gp = async (gx, gy) => pg.evaluate(([gx, gy]) => { const c = document.getElementById('grid'); const r = c.getBoundingClientRect(); const cw = r.width/c.width, ch = r.height/c.height; return { x: r.left + (gx+0.5)*cw, y: r.top + (gy+0.5)*ch }; }, [gx, gy]);
+const a = await gp(70, 50), bb = await gp(170, 125);
+await pg.evaluate(async ([ax, ay, bx, by]) => { const cv = document.getElementById('grid'); const f = (t, ty, x, y) => t.dispatchEvent(new PointerEvent(ty, { pointerId:1, pointerType:'touch', isPrimary:true, bubbles:true, cancelable:true, clientX:x, clientY:y })); f(cv,'pointerdown',ax,ay); for (let i=1;i<=8;i++){ const t=i/8; f(window,'pointermove',ax+(bx-ax)*t,ay+(by-ay)*t); await new Promise(r=>setTimeout(r,16)); } }, [a.x, a.y, bb.x, bb.y]);
+await pg.waitForTimeout(300);
+await pg.screenshot({ path: join(__d, '..', 'out', 'mob-select.png') });
+await b.close(); s.close(); console.log('shot done -> out/mob-select.png');

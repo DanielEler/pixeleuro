@@ -1,0 +1,20 @@
+{
+  "name": "pixeleuro-demos",
+  "version": "1.0.0",
+  "description": "Code-getriebene, re-render-bare Produkt-Demo-Pipeline für PixelEuro (Capture -> Compose -> Render)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "node capture/buy.mjs",
+    "build": "node compose/build.mjs",
+    "run": "node run.mjs",
+    "voices": "node tts/sample-voices.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.61.1"
+  }
+}

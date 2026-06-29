@@ -1,0 +1,30 @@
+{
+  "flow": "teaser",
+  "title": { "de": "Tag 1 Teaser", "en": "Day 1 teaser" },
+  "beats": [
+    {
+      "label": "day1",
+      "narration": { "de": "Tag eins.", "en": "Day one." },
+      "big": { "de": "TAG 1", "en": "DAY 1" }
+    },
+    {
+      "label": "empty",
+      "narration": { "de": "Eine Wand aus hundertfünfundzwanzigtausend Pixeln. Und null verkauft.", "en": "A wall of 125,000 pixels. And zero sold — yet." },
+      "big": { "de": "0 VERKAUFT", "en": "0 SOLD" },
+      "sub": { "de": "von 125.000 Pixeln", "en": "of 125,000 pixels" },
+      "grid": true
+    },
+    {
+      "label": "price",
+      "narration": { "de": "Ein Pixel, ein Euro — für immer deins.", "en": "One pixel, one euro — yours forever." },
+      "big": { "de": "1 PIXEL = 1 €", "en": "1 PIXEL = 1 €" },
+      "sub": { "de": "für immer", "en": "forever" }
+    },
+    {
+      "label": "cta",
+      "narration": { "de": "Sei der Erste, der sich ein Stück Internet sichert.", "en": "Be the first to own a piece of the internet." },
+      "big": { "de": "SEI DER ERSTE", "en": "BE THE FIRST" },
+      "sub": { "de": "pixeleuro.de", "en": "pixeleuro.de" }
+    }
+  ]
+}

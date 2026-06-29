@@ -1,0 +1,16 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PixelEuro Logo">
+  <!-- Münz-Kachel (Pixel-Look) -->
+  <rect x="6" y="6" width="108" height="108" rx="26" fill="#FFCB3A"/>
+  <rect x="9" y="9" width="102" height="102" rx="23" fill="none" stroke="#E3A52A" stroke-width="5"/>
+  <rect x="20" y="17" width="34" height="11" rx="5" fill="#FFE490" opacity="0.85"/>
+  <!-- Pixel-€ -->
+  <g fill="#6B4410">
+    <rect x="44" y="23" width="10" height="10"/><rect x="55" y="23" width="10" height="10"/><rect x="66" y="23" width="10" height="10"/><rect x="77" y="23" width="10" height="10"/>
+    <rect x="33" y="34" width="10" height="10"/><rect x="44" y="34" width="10" height="10"/>
+    <rect x="33" y="45" width="10" height="10"/><rect x="44" y="45" width="10" height="10"/><rect x="55" y="45" width="10" height="10"/><rect x="66" y="45" width="10" height="10"/>
+    <rect x="33" y="56" width="10" height="10"/><rect x="44" y="56" width="10" height="10"/>
+    <rect x="33" y="67" width="10" height="10"/><rect x="44" y="67" width="10" height="10"/><rect x="55" y="67" width="10" height="10"/><rect x="66" y="67" width="10" height="10"/>
+    <rect x="33" y="78" width="10" height="10"/><rect x="44" y="78" width="10" height="10"/>
+    <rect x="44" y="89" width="10" height="10"/><rect x="55" y="89" width="10" height="10"/><rect x="66" y="89" width="10" height="10"/><rect x="77" y="89" width="10" height="10"/>
+  </g>
+</svg>
