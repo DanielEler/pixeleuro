@@ -81,8 +81,25 @@ app.use(express.static(join(__dirname, '..', 'public')));
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 }, // max 3 MB Upload
+  limits: { fileSize: 12 * 1024 * 1024 }, // 12 MB – Handyfotos sind oft 4–10 MB
 });
+
+// Upload-Middleware mit SAUBERER Fehlerbehandlung: ein zu großes Bild darf
+// NIE einen unbehandelten 500 (HTML) werfen — der ließ den Bezahl-Button hängen.
+function uploadImage(req, res, next) {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      const tooBig = err.code === 'LIMIT_FILE_SIZE';
+      console.warn('Upload abgelehnt:', err.code || err.message);
+      return res.status(400).json({
+        error: tooBig
+          ? 'Image too large (max. 12 MB). Please pick a smaller photo and try again.'
+          : 'Could not read that image. Please try a different one.',
+      });
+    }
+    next();
+  });
+}
 
 const orderLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
 
@@ -171,7 +188,7 @@ app.get('/img/:id', async (req, res) => {
 });
 
 // ---------- API: Bestellung anlegen + Stripe-Checkout starten ----------
-app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) => {
+app.post('/api/orders', orderLimiter, uploadImage, async (req, res) => {
   try {
     if (!stripe) return res.status(503).json({ error: 'Payment is not configured.' });
 
@@ -187,9 +204,10 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
       return res.status(400).json({ error: 'Invalid selection.' });
     if (x + w > CFG.gridW || y + h > CFG.gridH)
       return res.status(400).json({ error: 'Selection is outside the grid.' });
-    if (!req.file) return res.status(400).json({ error: 'Please upload an image.' });
     if (link && !/^https?:\/\/.+/i.test(link))
       return res.status(400).json({ error: 'Link must start with http:// or https://.' });
+    // Bild ist OPTIONAL: wer im In-App-Browser keins hochladen kann, bekommt
+    // einen einfarbigen Marken-Block (kann später ersetzt werden).
 
     const pixels = w * h;
     const amount = pixels * CFG.pricePerPixel;
@@ -198,28 +216,32 @@ app.post('/api/orders', orderLimiter, upload.single('image'), async (req, res) =
         error: `Minimum order ${(CFG.minOrderCents / 100).toFixed(2)} € – please choose more pixels.`,
       });
 
-    // Bild exakt auf die Rechteckgröße bringen (PNG, in DB gespeichert).
-    // Ohne sharp wird das Original gespeichert; der Browser skaliert es beim Zeichnen.
-    let imageBuf = req.file.buffer;
-    let imageMime = req.file.mimetype || 'image/png';
-    if (sharp) {
-      try {
-        // failOn:'none' -> sharp bricht nicht bei harmlosen Warnungen ab
-        // (z. B. ICC-/Profil-Eigenheiten von macOS-Screenshots).
-        // .rotate() berücksichtigt die EXIF-Orientierung.
-        imageBuf = await sharp(req.file.buffer, { failOn: 'none' })
-          .rotate()
-          .resize(w, h, { fit: 'fill' })
-          .png()
-          .toBuffer();
-        imageMime = 'image/png';
-      } catch (err) {
-        // Robust statt hart abbrechen: Original speichern (Browser skaliert es
-        // beim Zeichnen). So scheitert der Kauf nie an der Bildverarbeitung.
-        console.error('sharp processing failed, storing original image:', err);
-        imageBuf = req.file.buffer;
-        imageMime = req.file.mimetype || 'image/png';
+    // Bild bestimmen. Drei Fälle, alle ohne harten Abbruch:
+    //  (a) Bild hochgeladen + sharp -> exakt auf w×h skalieren (PNG).
+    //  (b) Bild hochgeladen, sharp fehlt/scheitert -> Original speichern.
+    //  (c) KEIN Bild -> einfarbiger Marken-Block (In-App-Browser-Fallback).
+    let imageBuf, imageMime = 'image/png';
+    // 1x1 PNG (Marken-Blau) als letzte Rückfallebene ohne sharp:
+    const FALLBACK_PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgLy39DwAEYAH3y4lJBwAAAABJRU5ErkJggg==',
+      'base64');
+    if (req.file) {
+      imageBuf = req.file.buffer;
+      imageMime = req.file.mimetype || 'image/png';
+      if (sharp) {
+        try {
+          imageBuf = await sharp(req.file.buffer, { failOn: 'none' }).rotate().resize(w, h, { fit: 'fill' }).png().toBuffer();
+          imageMime = 'image/png';
+        } catch (err) {
+          console.error('sharp processing failed, storing original image:', err);
+          imageBuf = req.file.buffer; imageMime = req.file.mimetype || 'image/png';
+        }
       }
+    } else if (sharp) {
+      // Einfarbiger Block in Marken-Blau, exakt w×h
+      imageBuf = await sharp({ create: { width: w, height: h, channels: 3, background: { r: 47, g: 107, b: 255 } } }).png().toBuffer();
+    } else {
+      imageBuf = FALLBACK_PNG; // Browser skaliert das 1x1 auf die Fläche
     }
 
     // Transaktion: Überschneidung prüfen + reservieren (verhindert Doppelverkauf)

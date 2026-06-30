@@ -262,27 +262,52 @@ function closeModal() {
   selBadge.classList.add('hidden');
 }
 
+// Bild im Browser auf die Auswahlgröße verkleinern -> winziger Upload,
+// kein 3-MB-Problem mehr, funktioniert auch mit großen Handyfotos.
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+    img.src = url;
+  });
+}
+async function downscaleToBlob(file, w, h) {
+  const tw = Math.max(1, Math.min(w, 600)), th = Math.max(1, Math.min(h, 600));
+  const img = await loadImageFile(file);
+  const c = document.createElement('canvas'); c.width = tw; c.height = th;
+  c.getContext('2d').drawImage(img, 0, 0, tw, th);
+  return await new Promise((r) => c.toBlob(r, 'image/png'));
+}
+
 async function submitOrder(e) {
   e.preventDefault();
   const err = document.getElementById('formError');
   const btn = document.getElementById('payBtn');
-  err.classList.add('hidden');
-  btn.disabled = true; btn.textContent = 'Preparing…';
-  const fd = new FormData();
-  fd.append('x', sel.x); fd.append('y', sel.y); fd.append('w', sel.w); fd.append('h', sel.h);
-  fd.append('image', document.getElementById('imgInput').files[0]);
-  fd.append('link', document.getElementById('linkInput').value);
-  fd.append('title', document.getElementById('titleInput').value);
-  fd.append('email', document.getElementById('emailInput').value);
+  const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); btn.disabled = false; btn.textContent = 'Continue to payment →'; };
+  err.classList.add('hidden'); btn.disabled = true; btn.textContent = 'Preparing…';
   try {
-    const res = await fetch('/api/orders', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error');
+    const fd = new FormData();
+    fd.append('x', sel.x); fd.append('y', sel.y); fd.append('w', sel.w); fd.append('h', sel.h);
+    const file = document.getElementById('imgInput').files[0];
+    if (file) {
+      let blob = null;
+      try { blob = await downscaleToBlob(file, sel.w, sel.h); } catch { blob = null; }
+      fd.append('image', blob || file, 'image.png'); // Fallback: Original (Server hält 12 MB aus)
+    } // ohne Bild: Server setzt einen einfarbigen Block
+    fd.append('link', document.getElementById('linkInput').value);
+    fd.append('title', document.getElementById('titleInput').value);
+    fd.append('email', document.getElementById('emailInput').value);
+
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 45000);
+    let res; try { res = await fetch('/api/orders', { method: 'POST', body: fd, signal: ctrl.signal }); } finally { clearTimeout(to); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return fail(data.error || `Error (${res.status}). Please try again.`);
+    if (!data.checkoutUrl) return fail('No checkout link received. Please try again.');
     window.location.href = data.checkoutUrl;
   } catch (e2) {
-    err.textContent = e2.message;
-    err.classList.remove('hidden');
-    btn.disabled = false; btn.textContent = 'Continue to payment →';
+    fail(e2.name === 'AbortError' ? 'Upload took too long — try a smaller image or better connection.' : (e2.message || 'Something went wrong. Please try again.'));
   }
 }
 
