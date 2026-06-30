@@ -1,0 +1,29 @@
+name: Approve pixel
+on:
+  workflow_dispatch:
+    inputs:
+      ad_id:
+        description: 'Ad ID to approve (set status=active, approved=true)'
+        required: true
+        default: '12'
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate input
+        run: |
+          case "${{ inputs.ad_id }}" in
+            ''|*[!0-9]*) echo "ad_id must be numeric"; exit 1 ;;
+          esac
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Approve ad (no personal data in output)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}" '
+            cd /home/semesto/PixelEuro
+            docker compose exec -T pixeleuro-db psql -U pixel -d pixelwebsite -x -c "UPDATE ads SET status='"'"'active'"'"', approved=TRUE WHERE id=${{ inputs.ad_id }} AND status='"'"'paid'"'"' RETURNING id,x,y,w,h,title,status,approved;" 2>&1 || echo "(update failed)"
+          '
