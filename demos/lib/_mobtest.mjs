@@ -25,7 +25,7 @@ const browser = await chromium.launch();
 const ctx = await browser.newContext({ ...devices['iPhone 13'] }); // hasTouch + isMobile
 const page = await ctx.newPage();
 await installMocks(page, { empty: true });
-await page.goto(base + '/', { waitUntil: 'networkidle' });
+await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(700);
 
 // Touch-Drag via echte PointerEvents (pointerType:touch)

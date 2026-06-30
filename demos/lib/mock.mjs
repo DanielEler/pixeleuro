@@ -107,9 +107,16 @@ export const emptyAdsResponse = {
 };
 
 // Installiert die Route-Mocks auf einer Playwright-Page.
-// opts.empty = true -> leere Wand (0 verkauft).
+// opts.empty  = true        -> leere Wand (0 verkauft).
+// opts.pixels = [{x,y,c}]    -> genau diese Pro-Pixel-Zellen verkauft (z. B. „1. Pixel").
 export async function installMocks(page, opts = {}) {
-  const adsBody = JSON.stringify(opts.empty ? emptyAdsResponse : mockAdsResponse);
+  let body;
+  if (opts.pixels) {
+    body = { pixels: opts.pixels, ads: [], soldPixels: opts.pixels.length, totalPixels: GRID_W * GRID_H };
+  } else {
+    body = opts.empty ? emptyAdsResponse : mockAdsResponse;
+  }
+  const adsBody = JSON.stringify(body);
   await page.route('**/api/config', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(mockConfig) })
   );

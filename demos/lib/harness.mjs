@@ -80,7 +80,11 @@ export async function runCapture(cfg, flow) {
   const { server, port } = await startStaticServer();
   const baseURL = `http://127.0.0.1:${port}`;
 
-  const browser = await chromium.launch({ args: ['--force-color-profile=srgb'] });
+  // --force-device-scale-factor: ohne diesen Flag nimmt der CDP-Screencast im
+  // Headless nur in CSS-Pixeln auf (z. B. 414) -> 4K-Render skaliert hoch -> matschig.
+  const browser = await chromium.launch({
+    args: ['--force-color-profile=srgb', `--force-device-scale-factor=${dsf}`, '--high-dpi-support=1'],
+  });
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: dsf,
@@ -229,7 +233,13 @@ export async function runCapture(cfg, flow) {
   };
 
   // --- Aufnahme starten ---
-  await client.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
+  // WICHTIG: maxWidth/maxHeight in GERÄTE-Pixeln (width*dsf) übergeben — sonst
+  // nimmt CDP nur in CSS-Pixeln auf (z. B. 414px) und das 4K-Render skaliert
+  // ein winziges Video hoch -> matschig. So kommt der Screencast scharf in voller Auflösung.
+  await client.send('Page.startScreencast', {
+    format: 'png', everyNthFrame: 1,
+    maxWidth: Math.round(width * dsf), maxHeight: Math.round(height * dsf),
+  });
   t0 = performance.now();
 
   await flow(d);
