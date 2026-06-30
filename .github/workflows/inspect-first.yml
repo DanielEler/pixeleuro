@@ -1,0 +1,21 @@
+name: Inspect first pixel
+on: { workflow_dispatch: {} }
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Dump first ad + pixel
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}" '
+            cd /home/semesto/PixelEuro
+            echo "===== ALL ADS (oldest first, no image blob) ====="
+            docker compose exec -T pixeleuro-db psql -U pixel -d pixelwebsite -x -c "SELECT id,x,y,w,h,pixel_count,title,link,email,status,approved,amount_cents,created_at,paid_at,length(image) AS image_bytes,image_mime FROM ads ORDER BY created_at ASC LIMIT 5;" 2>&1 || echo "(query failed)"
+            echo "===== PIXELS (truth table) ====="
+            docker compose exec -T pixeleuro-db psql -U pixel -d pixelwebsite -c "SELECT x,y,ad_id,color FROM pixels ORDER BY x,y LIMIT 20;" 2>&1 || true
+          '
