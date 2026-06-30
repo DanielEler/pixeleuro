@@ -98,8 +98,9 @@ export const mockAdsResponse = {
 // Prime-Zone (Grid-Koordinaten) für die Capture-Flows exportiert.
 export const primeZone = PRIME;
 
-// Leere Wand (Tag 1: noch nichts verkauft).
+// Leere Wand (Tag 1: noch nichts verkauft). Neue Pro-Pixel-Form: pixels[].
 export const emptyAdsResponse = {
+  pixels: [],
   ads: [],
   soldPixels: 0,
   totalPixels: GRID_W * GRID_H,

@@ -61,13 +61,19 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     try {
-      await query(
+      const r = await query(
         `UPDATE ads
            SET status = 'paid', paid_at = now(), email = COALESCE($2, email)
          WHERE stripe_session_id = $1 AND status = 'reserved'`,
         [session.id, session.customer_details?.email || null]
       );
-      console.log('✅ Payment confirmed for session', session.id);
+      if (r.rowCount === 0) {
+        // Reservierung war bei Zahlungseingang schon abgelaufen -> Pixel evtl. weg.
+        // Laut + sichtbar loggen für manuelle Prüfung/Erstattung.
+        console.error('⚠️ PAYMENT_AFTER_EXPIRY — paid but no reserved ad for session', session.id);
+      } else {
+        console.log('✅ Payment confirmed for session', session.id);
+      }
     } catch (err) {
       console.error('Error recording payment:', err);
     }
@@ -112,13 +118,19 @@ function clampInt(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-// Gibt abgelaufene Reservierungen wieder frei.
+// Gibt abgelaufene Reservierungen frei — inkl. der belegten Pixel (sonst
+// bleiben die Zellen für immer gesperrt). Pixel ZUERST löschen wäre falsch
+// (FK), daher: erst expired markieren, dann deren Pixel löschen.
 async function releaseExpired() {
   try {
-    await query(
+    const { rows } = await query(
       `UPDATE ads SET status = 'expired'
-       WHERE status = 'reserved' AND reserved_until < now()`
+       WHERE status = 'reserved' AND reserved_until < now()
+       RETURNING id`
     );
+    if (rows.length) {
+      await query(`DELETE FROM pixels WHERE ad_id = ANY($1::bigint[])`, [rows.map((r) => r.id)]);
+    }
   } catch (err) {
     console.error('Cleanup error:', err.message);
   }
@@ -141,32 +153,28 @@ app.get('/api/config', (req, res) => {
 // ---------- API: belegte Flächen + aktive Anzeigen ----------
 app.get('/api/ads', async (req, res) => {
   try {
-  await releaseExpired();
-  const { rows } = await query(
-    `SELECT id, x, y, w, h, link, title, status
-       FROM ads
-      WHERE status = 'active'
-         OR status = 'paid'
-         OR (status = 'reserved' AND reserved_until > now())`
-  );
-  // Sensible Daten (E-Mail) niemals ausliefern. Bild/Link nur bei aktiven Anzeigen.
-  const ads = rows.map((r) => ({
-    id: r.id,
-    x: r.x, y: r.y, w: r.w, h: r.h,
-    occupied: r.status !== 'active',           // belegt, aber noch nicht freigeschaltet
-    title: r.status === 'active' ? r.title : null,
-    link: r.status === 'active' ? r.link : null,
-    image: r.status === 'active' ? `/img/${r.id}` : null,
-  }));
-  // Nur TATSÄCHLICH verkaufte Pixel zählen (bezahlt/aktiv). Reservierte
-  // (im Checkout, noch nicht bezahlt) blockieren die Fläche, gelten aber
-  // NICHT als "verkauft" — sonst zeigt ein Zahlungsabbruch fälschlich
-  // verkaufte Pixel an.
-  const soldPixels = rows.reduce(
-    (s, r) => s + ((r.status === 'active' || r.status === 'paid') ? r.w * r.h : 0),
-    0
-  );
-  res.json({ ads, soldPixels, totalPixels: CFG.gridW * CFG.gridH });
+    await releaseExpired();
+    // Belegte Einzelpixel: freigegebene zeigen ihre echte Farbe, noch nicht
+    // moderierte (reserved/paid) erscheinen NEUTRAL grau (Inhalt erst nach Prüfung).
+    const { rows: pix } = await query(
+      `SELECT p.x, p.y,
+              CASE WHEN a.status = 'active' THEN p.color ELSE '#c6d4da' END AS color,
+              (a.status IN ('active','paid'))::int AS sold
+         FROM pixels p
+         JOIN ads a ON a.id = p.ad_id
+        WHERE a.status IN ('active','paid')
+           OR (a.status = 'reserved' AND a.reserved_until > now())`
+    );
+    const pixels = pix.map((r) => ({ x: r.x, y: r.y, c: r.color }));
+    const soldPixels = pix.reduce((s, r) => s + (r.sold ? 1 : 0), 0);
+
+    // Aktive (freigeschaltete) Anzeigen: Bounding-Box + Link/Titel für Tooltip/Klick.
+    const { rows: ads } = await query(
+      `SELECT id, x, y, w, h, title, link FROM ads WHERE status = 'active'`
+    );
+    const adsOut = ads.map((a) => ({ id: a.id, x: a.x, y: a.y, w: a.w, h: a.h, title: a.title, link: a.link, image: `/img/${a.id}` }));
+
+    res.json({ pixels, ads: adsOut, soldPixels, totalPixels: CFG.gridW * CFG.gridH });
   } catch (err) {
     console.error('Error in /api/ads:', err.message);
     res.status(500).json({ error: 'Database unavailable.' });
@@ -192,99 +200,85 @@ app.get('/img/:id', async (req, res) => {
 // ---------- API: Bestellung anlegen + Stripe-Checkout starten ----------
 app.post('/api/orders', orderLimiter, uploadImage, async (req, res) => {
   try {
-    // Jeder Bestellversuch wird geloggt -> "wie oft wurde der Button gedrückt?"
-    // zählbar via: docker logs pixeleuro | grep ORDER_ATTEMPT | wc -l
-    console.log('ORDER_ATTEMPT', new Date().toISOString(), `${req.body.w}x${req.body.h}`, 'img:', !!req.file);
     if (!stripe) return res.status(503).json({ error: 'Payment is not configured.' });
 
-    const x = clampInt(req.body.x, 0, CFG.gridW - 1);
-    const y = clampInt(req.body.y, 0, CFG.gridH - 1);
-    const w = clampInt(req.body.w, 1, CFG.gridW);
-    const h = clampInt(req.body.h, 1, CFG.gridH);
+    // Freiform-Zellen vom Client parsen + SERVERSEITIG validieren (nie dem Client trauen).
+    let raw;
+    try { raw = JSON.parse(req.body.cells || '[]'); } catch { raw = []; }
+    if (!Array.isArray(raw) || raw.length === 0)
+      return res.status(400).json({ error: 'Please paint some pixels first.' });
+
+    const seen = new Set();
+    const xs = [], ys = [], colors = [];
+    let bx = Infinity, by = Infinity, bX = -1, bY = -1;
+    for (const c of raw) {
+      const cx = clampInt(c && c.x, 0, CFG.gridW - 1);
+      const cy = clampInt(c && c.y, 0, CFG.gridH - 1);
+      if (cx === null || cy === null) continue;
+      const key = cx + ',' + cy;
+      if (seen.has(key)) continue;            // Duplikate raus (sonst Selbst-Kollision)
+      seen.add(key);
+      const col = (c && typeof c.c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.c)) ? c.c.toLowerCase() : '#2f6bff';
+      xs.push(cx); ys.push(cy); colors.push(col);
+      if (cx < bx) bx = cx; if (cy < by) by = cy; if (cx > bX) bX = cx; if (cy > bY) bY = cy;
+    }
+    const pixelCount = xs.length;
+    if (pixelCount === 0) return res.status(400).json({ error: 'No valid pixels selected.' });
+    if (pixelCount > CFG.gridW * CFG.gridH) return res.status(400).json({ error: 'Too many pixels.' });
+
+    console.log('ORDER_ATTEMPT', new Date().toISOString(), pixelCount + 'px', 'img:', !!req.file);
+
     const link = (req.body.link || '').trim();
     const title = (req.body.title || '').trim().slice(0, 120);
     const email = (req.body.email || '').trim().slice(0, 200);
-
-    if (x === null || y === null || w === null || h === null)
-      return res.status(400).json({ error: 'Invalid selection.' });
-    if (x + w > CFG.gridW || y + h > CFG.gridH)
-      return res.status(400).json({ error: 'Selection is outside the grid.' });
     if (link && !/^https?:\/\/.+/i.test(link))
       return res.status(400).json({ error: 'Link must start with http:// or https://.' });
-    // Bild ist OPTIONAL: wer im In-App-Browser keins hochladen kann, bekommt
-    // einen einfarbigen Marken-Block (kann später ersetzt werden).
 
-    const pixels = w * h;
-    const amount = pixels * CFG.pricePerPixel;
+    const amount = pixelCount * CFG.pricePerPixel;
     if (amount < CFG.minOrderCents)
-      return res.status(400).json({
-        error: `Minimum order ${(CFG.minOrderCents / 100).toFixed(2)} € – please choose more pixels.`,
-      });
+      return res.status(400).json({ error: `Minimum order ${(CFG.minOrderCents / 100).toFixed(2)} € – please pick more pixels.` });
 
-    // Bild bestimmen. Drei Fälle, alle ohne harten Abbruch:
-    //  (a) Bild hochgeladen + sharp -> exakt auf w×h skalieren (PNG).
-    //  (b) Bild hochgeladen, sharp fehlt/scheitert -> Original speichern.
-    //  (c) KEIN Bild -> einfarbiger Marken-Block (In-App-Browser-Fallback).
-    let imageBuf, imageMime = 'image/png';
-    // 1x1 PNG (Marken-Blau) als letzte Rückfallebene ohne sharp:
-    const FALLBACK_PNG = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgLy39DwAEYAH3y4lJBwAAAABJRU5ErkJggg==',
-      'base64');
+    const bw = bX - bx + 1, bh = bY - by + 1;
+
+    // Optionales Design-Bild (für Moderation/Logo) — Rendering läuft pro-Pixel über Farben.
+    let imageBuf = null, imageMime = 'image/png';
     if (req.file) {
-      imageBuf = req.file.buffer;
-      imageMime = req.file.mimetype || 'image/png';
-      if (sharp) {
-        try {
-          imageBuf = await sharp(req.file.buffer, { failOn: 'none' }).rotate().resize(w, h, { fit: 'fill' }).png().toBuffer();
-          imageMime = 'image/png';
-        } catch (err) {
-          console.error('sharp processing failed, storing original image:', err);
-          imageBuf = req.file.buffer; imageMime = req.file.mimetype || 'image/png';
-        }
-      }
-    } else if (sharp) {
-      // Einfarbiger Block in Marken-Blau, exakt w×h
-      imageBuf = await sharp({ create: { width: w, height: h, channels: 3, background: { r: 47, g: 107, b: 255 } } }).png().toBuffer();
-    } else {
-      imageBuf = FALLBACK_PNG; // Browser skaliert das 1x1 auf die Fläche
+      imageBuf = req.file.buffer; imageMime = req.file.mimetype || 'image/png';
+      if (sharp) { try { imageBuf = await sharp(req.file.buffer, { failOn: 'none' }).png().toBuffer(); imageMime = 'image/png'; } catch { imageBuf = req.file.buffer; } }
     }
 
-    // Transaktion: Überschneidung prüfen + reservieren (verhindert Doppelverkauf)
+    // Atomar: Anzeige anlegen + ALLE Zellen claimen. PRIMARY KEY(x,y) verhindert
+    // Doppelverkauf physisch — kollidiert auch nur eine Zelle, schlägt das ganze
+    // INSERT fehl (23505) und die Transaktion rollt komplett zurück (kein Teil-Besitz).
     const client = await pool.connect();
-    let adId;
+    let adId, conflict = false;
     try {
       await client.query('BEGIN');
-      const overlap = await client.query(
-        `SELECT 1 FROM ads
-          WHERE (status = 'active' OR status = 'paid'
-                 OR (status = 'reserved' AND reserved_until > now()))
-            AND NOT ($1::int + $3::int <= x OR x + w <= $1::int
-                  OR $2::int + $4::int <= y OR y + h <= $2::int)
-          FOR UPDATE`,
-        [x, y, w, h]
-      );
-      if (overlap.rows.length) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Sorry, this area is already taken.' });
-      }
       const ins = await client.query(
-        `INSERT INTO ads (x, y, w, h, link, title, email, image, image_mime, amount_cents,
-                          status, reserved_until)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'reserved', now() + ($11::int * interval '1 minute'))
+        `INSERT INTO ads (x, y, w, h, pixel_count, link, title, email, image, image_mime,
+                          amount_cents, status, reserved_until)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'reserved', now() + ($12::int * interval '1 minute'))
          RETURNING id`,
-        [x, y, w, h, link || null, title || null, email || null, imageBuf, imageMime, amount,
-          String(CFG.reservationMin)]
+        [bx, by, bw, bh, pixelCount, link || null, title || null, email || null, imageBuf, imageMime, amount, String(CFG.reservationMin)]
       );
       adId = ins.rows[0].id;
+      await client.query(
+        `INSERT INTO pixels (x, y, ad_id, color)
+         SELECT u.x, u.y, $4::bigint, u.color
+           FROM unnest($1::int[], $2::int[], $3::text[]) AS u(x, y, color)`,
+        [xs, ys, colors, adId]
+      );
       await client.query('COMMIT');
     } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
+      await client.query('ROLLBACK').catch(() => {});
+      if (err.code === '23505') conflict = true; else throw err;
     } finally {
       client.release();
     }
+    if (conflict)
+      return res.status(409).json({ error: 'Some of those pixels were just taken — adjust your selection and try again.' });
 
-    // Stripe Checkout-Session erstellen
+    // Stripe Checkout
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -292,10 +286,7 @@ app.post('/api/orders', orderLimiter, uploadImage, async (req, res) => {
         price_data: {
           currency: 'eur',
           unit_amount: amount,
-          product_data: {
-            name: `${pixels} pixels on ${CFG.siteName}`,
-            description: `Position ${x},${y} · Size ${w}×${h}`,
-          },
+          product_data: { name: `${pixelCount} pixels on ${CFG.siteName}`, description: `Freeform pixel art (${pixelCount} px)` },
         },
       }],
       customer_email: email || undefined,
@@ -303,7 +294,6 @@ app.post('/api/orders', orderLimiter, uploadImage, async (req, res) => {
       cancel_url: `${CFG.publicUrl}/?canceled=1&ad=${adId}`,
       metadata: { adId: String(adId) },
     });
-
     await query(`UPDATE ads SET stripe_session_id = $1 WHERE id = $2`, [session.id, adId]);
     res.json({ checkoutUrl: session.url });
   } catch (err) {
@@ -318,7 +308,8 @@ app.post('/api/orders/release', async (req, res) => {
   try {
     const adId = clampInt(req.body.adId, 1, Number.MAX_SAFE_INTEGER);
     if (!adId) return res.status(400).json({ error: 'Invalid id.' });
-    await query(`UPDATE ads SET status = 'expired' WHERE id = $1 AND status = 'reserved'`, [adId]);
+    const r = await query(`UPDATE ads SET status = 'expired' WHERE id = $1 AND status = 'reserved' RETURNING id`, [adId]);
+    if (r.rowCount) await query(`DELETE FROM pixels WHERE ad_id = $1`, [adId]); // Zellen freigeben
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal error.' });
@@ -359,8 +350,9 @@ app.post('/api/admin/ads/:id/approve', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/ads/:id/reject', requireAdmin, async (req, res) => {
-  // Inhalt löschen, Fläche freigeben. (Rückerstattung ggf. manuell in Stripe.)
+  // Inhalt löschen + Pixel freigeben. (Rückerstattung ggf. manuell in Stripe.)
   await query(`UPDATE ads SET status = 'rejected', image = NULL WHERE id = $1`, [req.params.id]);
+  await query(`DELETE FROM pixels WHERE ad_id = $1`, [req.params.id]);
   res.json({ ok: true });
 });
 

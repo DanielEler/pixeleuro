@@ -45,6 +45,14 @@ jobs:
             src public db \
             "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:/home/semesto/PixelEuro/"
 
+      # DB-Migration ZUERST (additiv/idempotent), damit das neue Backend die
+      # pixels-Tabelle vorfindet, bevor der App-Container neu startet.
+      - name: DB-Migration anwenden
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}" \
+            'cd /home/semesto/PixelEuro && docker compose exec -T pixeleuro-db psql -U pixel -d pixelwebsite < db/migration_001_perpixel.sql'
+
       - name: Container neu bauen + starten
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \

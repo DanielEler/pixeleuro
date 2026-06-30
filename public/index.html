@@ -42,26 +42,38 @@
   <!-- THE WALL = the main thing -->
   <section id="wand" class="wall-section reveal">
     <h2 class="section-title">The wall – live</h2>
-    <p class="section-sub">Click "Get your pixel" and drag a rectangle. Each block is sold only once.</p>
+    <p class="section-sub">Paint your pixels — pinch to zoom, drag to move. 1 pixel = 1 €, yours forever.</p>
+
+    <!-- Toolbar (neutral, scales NOT with zoom) -->
     <div class="wall-toolbar">
-      <div class="mode-switch" id="modeSwitch" role="group" aria-label="Wall mode">
-        <button id="modeSelect" type="button" class="active">✏️ Select</button>
+      <div class="mode-switch" id="modeSwitch" role="group" aria-label="Mode">
+        <button id="modePaint" type="button" class="active">✏️ Paint</button>
         <button id="modeMove" type="button">✋ Move</button>
+        <button id="modeErase" type="button">🧽 Erase</button>
       </div>
-      <span class="hint" id="modeHint">Drag across the wall to pick your pixels.</span>
       <div class="zoom">
+        <button id="undoBtn" type="button" aria-label="Undo" title="Undo">↶</button>
+        <button id="clearBtn" type="button" aria-label="Clear" title="Clear">🗑</button>
         <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
         <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
       </div>
     </div>
+
+    <!-- Color palette -->
+    <div class="palette" id="palette" role="group" aria-label="Colors"></div>
+
+    <!-- Viewport with transformed world (canvas + grid) -->
     <div class="canvas-wrap" id="canvasWrap">
-      <canvas id="grid"></canvas>
-      <div id="selection" class="selection hidden"></div>
+      <div id="world">
+        <canvas id="grid"></canvas>
+      </div>
+      <div id="selBadge" class="sel-badge hidden"></div>
+      <div id="tooltip" class="tooltip hidden"></div>
     </div>
-    <div id="tooltip" class="tooltip hidden"></div>
-    <div id="selBadge" class="sel-badge hidden"></div>
+
     <div class="wall-cta">
-      <button class="cta" onclick="document.getElementById('startBuy').click()">Get my pixel now →</button>
+      <span class="hint" id="modeHint">Tip: zoom in for precise pixel art.</span>
+      <button class="cta" id="buyBtn" disabled>Pick pixels to continue →</button>
     </div>
   </section>
 
@@ -112,14 +124,10 @@
       <button class="modal-close" id="modalClose">✕</button>
       <h3>Your pixels</h3>
       <p class="selinfo">
-        Area: <b id="selSize">–</b> &nbsp;·&nbsp;
-        <b id="selPixels">0</b> pixels &nbsp;·&nbsp;
-        Price: <b id="selPrice">0.00 €</b>
+        <b id="selPixels">0</b> pixels &nbsp;·&nbsp; Price: <b id="selPrice">0.00 €</b>
       </p>
+      <p class="selnote">🎨 Your painted design goes on these pixels — forever. Add a link to make them clickable.</p>
       <form id="buyForm">
-        <label>Image / logo (optional – add it now or later)
-          <input type="file" name="image" id="imgInput" accept="image/*" />
-        </label>
         <label>Click-through link (optional)
           <input type="url" name="link" id="linkInput" placeholder="https://your-site.com" />
         </label>

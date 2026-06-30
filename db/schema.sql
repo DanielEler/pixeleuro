@@ -1,33 +1,33 @@
 -- ============================================================
---  Pixelwebsite – Datenbankschema (PostgreSQL)
---  Alle Daten (auch hochgeladene Bilder) liegen in der DB,
---  nicht im lokalen Dateisystem -> einfacher zu sichern & DSGVO-konform.
+--  PixelEuro – Datenbankschema (PostgreSQL)
+--  Freiform-Pixel-Besitz: jede einzelne Zelle gehört genau einer
+--  Anzeige (PRIMARY KEY (x,y) verhindert Doppelverkauf physisch).
+--  Alle Daten (auch Bilder) in der DB, nicht im Dateisystem (DSGVO).
 -- ============================================================
 
+-- Eine Anzeige = ein Kauf / ein Design (gemaltes Muster oder Logo).
 CREATE TABLE IF NOT EXISTS ads (
   id                BIGSERIAL PRIMARY KEY,
 
-  -- Position & Größe des gekauften Rechtecks im Raster (in Pixeln)
+  -- Bounding-Box des Designs (für Bild-Platzierung beim Rendern)
   x                 INTEGER NOT NULL CHECK (x >= 0),
   y                 INTEGER NOT NULL CHECK (y >= 0),
   w                 INTEGER NOT NULL CHECK (w >= 1),
   h                 INTEGER NOT NULL CHECK (h >= 1),
 
-  -- Inhalt der Anzeige
-  link              TEXT,              -- Ziel-URL beim Klick
-  title             TEXT,              -- Tooltip / Alt-Text
-  image             BYTEA,             -- das Logo/Bild, in der DB gespeichert
+  -- Tatsächlich gekaufte Einzelpixel (= Preis-Basis, kann < w*h sein)
+  pixel_count       INTEGER NOT NULL DEFAULT 0,
+
+  link              TEXT,
+  title             TEXT,
+  image             BYTEA,
   image_mime        TEXT NOT NULL DEFAULT 'image/png',
+  email             TEXT,
 
-  -- Käufer (datensparsam: nur das Nötigste)
-  email             TEXT,              -- für Zahlungsbeleg
-
-  -- Zahlung
   amount_cents      INTEGER NOT NULL,
   stripe_session_id TEXT,
 
-  -- Status: reserved | paid | active | rejected | expired
-  status            TEXT NOT NULL DEFAULT 'reserved',
+  status            TEXT NOT NULL DEFAULT 'reserved',   -- reserved | paid | active | rejected | expired
   approved          BOOLEAN NOT NULL DEFAULT FALSE,
   reserved_until    TIMESTAMPTZ,
 
@@ -35,7 +35,15 @@ CREATE TABLE IF NOT EXISTS ads (
   paid_at           TIMESTAMPTZ
 );
 
--- Schneller Zugriff für Überschneidungs-Prüfungen und Anzeige
-CREATE INDEX IF NOT EXISTS idx_ads_status   ON ads (status);
-CREATE INDEX IF NOT EXISTS idx_ads_rect     ON ads (x, y, w, h);
-CREATE INDEX IF NOT EXISTS idx_ads_session  ON ads (stripe_session_id);
+-- Pro-Pixel-Besitz: die Wahrheit für Überlappung & Doppelverkauf-Schutz.
+CREATE TABLE IF NOT EXISTS pixels (
+  x      INTEGER NOT NULL CHECK (x >= 0),
+  y      INTEGER NOT NULL CHECK (y >= 0),
+  ad_id  BIGINT  NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
+  color  TEXT,
+  PRIMARY KEY (x, y)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ads_status  ON ads (status);
+CREATE INDEX IF NOT EXISTS idx_ads_session ON ads (stripe_session_id);
+CREATE INDEX IF NOT EXISTS idx_pixels_ad   ON pixels (ad_id);
