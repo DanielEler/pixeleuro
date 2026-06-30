@@ -1,0 +1,25 @@
+name: Stats
+on: { workflow_dispatch: {} }
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Query order stats
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}" '
+            cd /home/semesto/PixelEuro
+            echo "===== ORDERS IN DB (all-time, by status) ====="
+            docker compose exec -T pixeleuro-db psql -U pixel -d pixelwebsite -c "SELECT status, count(*) FROM ads GROUP BY status ORDER BY count(*) DESC;" 2>&1 || echo "(db query failed)"
+            echo "===== TOTAL order rows (reached DB = got past image step) ====="
+            docker compose exec -T pixeleuro-db psql -U pixel -d pixelwebsite -t -c "SELECT count(*) FROM ads;" 2>&1 || true
+            echo "===== ORDER_ATTEMPT in current app log (since the fix deploy) ====="
+            docker logs pixeleuro 2>&1 | grep -c ORDER_ATTEMPT || true
+            echo "===== POST /api/orders seen by Caddy (total attempts incl. failed, IF access-logged) ====="
+            docker ps --format "{{.Names}}" | grep -i caddy | while read c; do echo "-- $c --"; docker logs "$c" 2>&1 | grep -c "api/orders" || true; done
+          '
