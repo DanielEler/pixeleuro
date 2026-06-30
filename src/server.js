@@ -101,7 +101,9 @@ function uploadImage(req, res, next) {
   });
 }
 
-const orderLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
+// Großzügiger: mobile Nutzer teilen sich oft eine Carrier-IP (NAT) — ein zu
+// niedriges Limit blockt echte Käufer. 60/Min/IP bremst nur Missbrauch.
+const orderLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 
 // ---------- Hilfsfunktionen ----------
 function clampInt(v, min, max) {
@@ -190,6 +192,9 @@ app.get('/img/:id', async (req, res) => {
 // ---------- API: Bestellung anlegen + Stripe-Checkout starten ----------
 app.post('/api/orders', orderLimiter, uploadImage, async (req, res) => {
   try {
+    // Jeder Bestellversuch wird geloggt -> "wie oft wurde der Button gedrückt?"
+    // zählbar via: docker logs pixeleuro | grep ORDER_ATTEMPT | wc -l
+    console.log('ORDER_ATTEMPT', new Date().toISOString(), `${req.body.w}x${req.body.h}`, 'img:', !!req.file);
     if (!stripe) return res.status(503).json({ error: 'Payment is not configured.' });
 
     const x = clampInt(req.body.x, 0, CFG.gridW - 1);
