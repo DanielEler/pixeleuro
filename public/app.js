@@ -1,8 +1,12 @@
 // ============================================================
-//  PixelEuro — Mobile-First Freiform-Paint-Canvas
-//  1 Finger = malen · 2 Finger = zoomen/verschieben (immer).
-//  Versetztes Fadenkreuz für Pixel-Präzision. Geste-Intent:
-//  erst malen, wenn klar kein Pinch. Screen-space UI (neutral).
+//  PixelEuro — Million-Dollar-Homepage-Modell (Block-Platzierung)
+//  Die ganze Wand ist sichtbar. Kunde lädt sein Bild hoch, ZIEHT es
+//  frei über die Wand (rastet aufs Raster), kauft den GANZEN
+//  Rechteck-Block. Belegte Pixel blockieren (kein Überlappen):
+//  Client markiert Kollisionen rot + sperrt den Kauf, die DB
+//  (PRIMARY KEY x,y) verhindert Doppelverkauf endgültig.
+//  1 Finger auf Block = ziehen · 1 Finger daneben = Wand schieben ·
+//  2 Finger = zoomen/verschieben.
 // ============================================================
 let CFG = null;
 let ADS = [];
@@ -12,41 +16,30 @@ const ctx = canvas.getContext('2d');
 const wrap = document.getElementById('canvasWrap');
 const world = document.getElementById('world');
 const selBadge = document.getElementById('selBadge');
-let brush = null; // Fadenkreuz-Element
-
-const PALETTE = ['#122530', '#ffffff', '#e11d48', '#f59e0b', '#facc15',
-                 '#16a34a', '#14c2da', '#2f6bff', '#7c3aed', '#ec4899'];
-let activeColor = '#2f6bff';
 
 let view = { s: 1, tx: 0, ty: 0 };
 let baseW = 0, baseH = 0, cell = 0;
 const MIN_S = 1, MAX_S = 40;
-const TOUCH_OFFSET = 46;      // Zielzelle so weit ÜBER dem Finger (gegen Verdeckung)
-const MOVE_THRESHOLD = 7;     // px Bewegung, ab der ein Tippen zum Strich wird
 
-let mode = 'paint';           // 'paint' | 'move' | 'erase'
-let erasing = false;
-
-const painted = new Map();    // "x,y" -> color (Auswahl des Users)
 const OWNED = new Map();      // "x,y" -> color (bereits belegte/verkaufte Zellen)
-const undoStack = [];
-let stroke = null;
-
-// Gesten
-const pointers = new Map();   // pointerId -> {x,y}
-let pending = null;           // 1-Finger: {startX,startY,painting}
-let panLast = null, pinchLast = null, lastCell = null;
-let gestureWasMulti = false;  // sobald 2 Finger -> kein Malen bis alle los
 let occMask = null;           // Uint8 Belegt-Maske (O(1))
 let dirty = true;
 
-// Bild-Upload: das Bild wird clientseitig auf das Pixelraster heruntergerechnet
-// und landet als Farben in `painted` — hochgeladen wird nur das winzige Pixel-PNG,
-// nie die große Originaldatei (deshalb sind MB kein Thema fürs Backend).
-let imgBitmap = null;         // geladenes Bild
-let imgCenter = null;         // {x,y} Zielzelle = Bildmitte
-let imgCells = [];            // von diesem Bild gesetzte painted-Keys (Ersetzen/Entfernen)
+// --- Der platzierte Bild-Block (genau einer) ---
+//  block = { bitmap, w, h, gx, gy, colors:[hex...], valid:bool }
+//  Es wird der GANZE Rechteck-Block gekauft; transparente Bildstellen -> Weiß.
+let block = null;
 const MAX_IMG_BYTES = 20 * 1024 * 1024; // Rohdatei-Obergrenze (nur Client, gegen Browser-Überlast)
+
+// Zeitlich begrenzte Hervorhebung (Permalink „dein Fleck")
+let highlight = null;         // { x, y, w, h, until }
+
+// Gesten
+const pointers = new Map();   // pointerId -> {x,y}
+let dragging = null;          // Block ziehen: { offX, offY } in Grid-Koordinaten
+let panLast = null;           // Wand schieben
+let pinchLast = null;
+let gestureWasMulti = false;
 
 init();
 
@@ -60,17 +53,12 @@ async function init() {
   canvas.height = CFG.gridH;
   occMask = new Uint8Array(CFG.gridW * CFG.gridH);
 
-  // Fadenkreuz anlegen
-  brush = document.createElement('div');
-  brush.id = 'brush'; brush.className = 'brush hidden';
-  wrap.appendChild(brush);
-
-  buildPalette();
   layout();
   await loadAds();
   handleReturnFromStripe();
   wireToolbar();
   wireGestures();
+  handlePermalink();
   requestAnimationFrame(renderLoop);
 
   window.addEventListener('resize', onResize);
@@ -95,7 +83,9 @@ function layout(oldCell) {
   cell = newCell;
   world.style.width = baseW + 'px';
   world.style.height = baseH + 'px';
-  wrap.style.height = Math.min(baseH, Math.max(320, window.innerHeight * 0.6)) + 'px';
+  // Ganze Wand sichtbar lassen (MDH-Gefühl): Höhe = volle Wandhöhe,
+  // gedeckelt, damit sie auf großen Screens nicht die Seite sprengt.
+  wrap.style.height = Math.min(baseH, Math.max(320, window.innerHeight * 0.72)) + 'px';
   clampView();
   applyView();
 }
@@ -112,27 +102,24 @@ function clampView() {
 }
 
 // ---- Koordinaten ----
-function screenToCell(clientX, clientY) {
+function screenToCellF(clientX, clientY) {   // Grid-Koordinate als Float
   const r = wrap.getBoundingClientRect();
-  const gx = Math.floor((clientX - r.left - view.tx) / (cell * view.s));
-  const gy = Math.floor((clientY - r.top - view.ty) / (cell * view.s));
-  if (gx < 0 || gy < 0 || gx >= CFG.gridW || gy >= CFG.gridH) return null;
-  return { x: gx, y: gy };
+  return {
+    x: (clientX - r.left - view.tx) / (cell * view.s),
+    y: (clientY - r.top - view.ty) / (cell * view.s),
+  };
 }
-// Fadenkreuz an die Zielzelle setzen (screen-space)
-function showBrush(c) {
-  if (!c) { brush.classList.add('hidden'); return; }
-  const cx = view.tx + (c.x + 0.5) * cell * view.s;
-  const cy = view.ty + (c.y + 0.5) * cell * view.s;
-  brush.style.left = cx + 'px'; brush.style.top = cy + 'px';
-  brush.style.width = brush.style.height = Math.max(10, cell * view.s) + 'px';
-  brush.classList.remove('hidden');
+function viewCenterCell() {
+  const r = wrap.getBoundingClientRect();
+  const f = screenToCellF(r.left + r.width / 2, r.top + r.height / 2);
+  return { x: Math.round(f.x), y: Math.round(f.y) };
 }
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 // ---- Daten ----
 async function loadAds() {
   const data = await (await fetch('/api/ads')).json();
-  ADS = data.ads || [];               // aktive Anzeigen (Bounding-Box) für Klick/Tooltip
+  ADS = data.ads || [];
   OWNED.clear(); occMask.fill(0);
   for (const p of (data.pixels || [])) {
     if (p.x >= 0 && p.y >= 0 && p.x < CFG.gridW && p.y < CFG.gridH) {
@@ -144,6 +131,7 @@ async function loadAds() {
   animateCount(document.getElementById('soldCount'), sold);
   animateCount(document.getElementById('freeCount'), total - sold);
   const pb = document.getElementById('progressBar'); if (pb) pb.style.width = (sold / total * 100) + '%';
+  if (block) computeValid();
   dirty = true;
 }
 function animateCount(el, target) {
@@ -153,48 +141,41 @@ function animateCount(el, target) {
     if (p < 1) requestAnimationFrame(step); })(performance.now());
 }
 
-// ---- Rendering (pro-Pixel) ----
+// ---- Rendering ----
 function occupied(gx, gy) { return occMask[gy * CFG.gridW + gx] === 1; }
-function renderLoop() { if (dirty) { draw(); dirty = false; } requestAnimationFrame(renderLoop); }
+function renderLoop() {
+  if (highlight && performance.now() < highlight.until) dirty = true;
+  else if (highlight) { highlight = null; dirty = true; }
+  if (dirty) { draw(); dirty = false; }
+  requestAnimationFrame(renderLoop);
+}
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // 1) belegte Zellen
   for (const [key, color] of OWNED) { const i = key.indexOf(','); ctx.fillStyle = color; ctx.fillRect(+key.slice(0, i), +key.slice(i + 1), 1, 1); }
-  for (const [key, color] of painted) { const i = key.indexOf(','); ctx.fillStyle = color; ctx.fillRect(+key.slice(0, i), +key.slice(i + 1), 1, 1); }
+  // 2) der platzierte Block (Kollisionen rot)
+  if (block) {
+    for (let j = 0; j < block.h; j++) for (let i = 0; i < block.w; i++) {
+      const gx = block.gx + i, gy = block.gy + j;
+      ctx.fillStyle = occupied(gx, gy) ? '#e11d48' : block.colors[j * block.w + i];
+      ctx.fillRect(gx, gy, 1, 1);
+    }
+  }
+  // 3) Permalink-Hervorhebung
+  if (highlight) {
+    const t = (highlight.until - performance.now()) / 4000;         // 1 -> 0
+    ctx.save();
+    ctx.strokeStyle = '#FFCB3A';
+    ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 200));
+    ctx.lineWidth = Math.max(0.6, 1.2 / view.s);
+    ctx.strokeRect(highlight.x - 0.5, highlight.y - 0.5, highlight.w + 1, highlight.h + 1);
+    ctx.restore();
+  }
 }
 
-// ---- Malen ----
-function paintCell(gx, gy) {
-  if (gx == null || gx < 0 || gy < 0 || gx >= CFG.gridW || gy >= CFG.gridH) return;
-  if (occupied(gx, gy)) return;
-  const key = gx + ',' + gy;
-  const prev = painted.has(key) ? painted.get(key) : null;
-  if (erasing) { if (prev === null) return; painted.delete(key); }
-  else { if (prev === activeColor) return; painted.set(key, activeColor); }
-  if (stroke) stroke.push({ key, prev });
-  dirty = true; updateBadge();
-}
-function paintLine(a, b) {
-  if (!a) { paintCell(b.x, b.y); return; }
-  let x0 = a.x, y0 = a.y; const x1 = b.x, y1 = b.y;
-  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx - dy;
-  for (;;) { paintCell(x0, y0); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 > -dy) { e -= dy; x0 += sx; } if (e2 < dx) { e += dx; y0 += sy; } }
-}
-function beginStroke() { stroke = []; }
-function endStroke() { if (stroke && stroke.length) { undoStack.push(stroke); if (undoStack.length > 60) undoStack.shift(); } stroke = null; updateBadge(); }
-function cancelStroke() { // verwerfen ohne Commit (z. B. wenn Pinch erkannt)
-  if (stroke) { for (let i = stroke.length - 1; i >= 0; i--) { const { key, prev } = stroke[i]; if (prev === null) painted.delete(key); else painted.set(key, prev); } stroke = null; dirty = true; updateBadge(); }
-}
-function undo() { const s = undoStack.pop(); if (!s) return; for (let i = s.length - 1; i >= 0; i--) { const { key, prev } = s[i]; if (prev === null) painted.delete(key); else painted.set(key, prev); } dirty = true; updateBadge(); }
-function clearAll() { if (!painted.size) return; undoStack.push([...painted].map(([key, c]) => ({ key, prev: c }))); painted.clear(); resetImageState(); dirty = true; updateBadge(); }
-
-// ---- Bild-Upload -> Pixel ----
-function viewCenterCell() {
-  const r = wrap.getBoundingClientRect();
-  return screenToCell(r.left + r.width / 2, r.top + r.height / 2) || { x: (CFG.gridW / 2) | 0, y: (CFG.gridH / 2) | 0 };
-}
-function resetImageState() {
-  imgCells = []; imgBitmap = null; imgCenter = null;
+// ---- Bild-Upload -> Block ----
+function resetBlock() {
+  block = null;
   const ib = document.getElementById('imgBar'); if (ib) ib.classList.add('hidden');
 }
 async function onImagePicked(e) {
@@ -203,83 +184,96 @@ async function onImagePicked(e) {
   if (!file) return;
   if (!/^image\//.test(file.type)) { showBanner('Please choose an image file.', 'warn'); return; }
   if (file.size > MAX_IMG_BYTES) { showBanner('Image too large (max 20 MB). Please pick a smaller file.', 'warn'); return; }
-  try { imgBitmap = await createImageBitmap(file); }
+  let bitmap;
+  try { bitmap = await createImageBitmap(file); }
   catch { showBanner('Could not read that image.', 'warn'); return; }
-  imgCenter = viewCenterCell();
+  block = { bitmap, w: 0, h: 0, gx: 0, gy: 0, colors: [], valid: false };
   document.getElementById('imgBar').classList.remove('hidden');
-  placeImage();
+  sizeBlock(viewCenterCell());
+  showBanner('Drag your image to a free spot, then hit buy.', 'ok');
 }
-function removeImage() { for (const key of imgCells) painted.delete(key); resetImageState(); dirty = true; updateBadge(); }
-function rgbToHex(r, g, b) { return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
-function placeImage() {
-  if (!imgBitmap || !imgCenter) return;
-  for (const key of imgCells) painted.delete(key);          // altes Bild ersetzen
-  imgCells = [];
-  const longest = Math.max(8, Math.min(120, +document.getElementById('imgSize').value || 44));
-  const ar = imgBitmap.width / imgBitmap.height;
+function removeImage() { resetBlock(); dirty = true; updateBadge(); }
+
+// Block aus dem Bild aufbauen: Größe aus Slider (längste Seite), Seitenverhältnis erhalten,
+// zentriert auf `center`. Transparente Pixel -> Weiß (der ganze Block wird gekauft).
+function sizeBlock(center) {
+  if (!block) return;
+  const longest = clamp(+document.getElementById('imgSize').value || 32, 8, Math.min(CFG.gridW, CFG.gridH));
+  const ar = block.bitmap.width / block.bitmap.height;
   let w = ar >= 1 ? longest : Math.round(longest * ar);
   let h = ar >= 1 ? Math.round(longest / ar) : longest;
-  w = Math.max(1, Math.min(CFG.gridW, w)); h = Math.max(1, Math.min(CFG.gridH, h));
+  w = clamp(w, 1, CFG.gridW); h = clamp(h, 1, CFG.gridH);
+
   const off = document.createElement('canvas'); off.width = w; off.height = h;
   const c = off.getContext('2d'); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-  c.drawImage(imgBitmap, 0, 0, w, h);
+  c.drawImage(block.bitmap, 0, 0, w, h);
   const data = c.getImageData(0, 0, w, h).data;
-  const ox = imgCenter.x - (w >> 1), oy = imgCenter.y - (h >> 1);
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-    const p = (j * w + i) * 4;
-    if (data[p + 3] < 128) continue;                        // transparent -> überspringen
-    const gx = ox + i, gy = oy + j;
-    if (gx < 0 || gy < 0 || gx >= CFG.gridW || gy >= CFG.gridH || occupied(gx, gy)) continue;
-    const key = gx + ',' + gy;
-    painted.set(key, rgbToHex(data[p], data[p + 1], data[p + 2]));
-    imgCells.push(key);
+  const colors = new Array(w * h);
+  for (let k = 0; k < w * h; k++) {
+    const p = k * 4;
+    colors[k] = data[p + 3] < 128 ? '#ffffff' : rgbToHex(data[p], data[p + 1], data[p + 2]);
   }
+  block.w = w; block.h = h; block.colors = colors;
+  block.gx = clamp(center.x - (w >> 1), 0, CFG.gridW - w);
+  block.gy = clamp(center.y - (h >> 1), 0, CFG.gridH - h);
+  computeValid();
+  dirty = true; updateBadge();
+}
+function rgbToHex(r, g, b) { return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
+
+// Kein-Überlappung: liegt IRGENDEINE Block-Zelle auf einer belegten Zelle?
+function computeValid() {
+  if (!block) return false;
+  let ok = true;
+  for (let j = 0; j < block.h && ok; j++) for (let i = 0; i < block.w; i++) {
+    if (occupied(block.gx + i, block.gy + j)) { ok = false; break; }
+  }
+  block.valid = ok;
+  return ok;
+}
+function moveBlockTo(gx, gy) {
+  block.gx = clamp(gx, 0, CFG.gridW - block.w);
+  block.gy = clamp(gy, 0, CFG.gridH - block.h);
+  computeValid();
   dirty = true; updateBadge();
 }
 
 // ---- Preis-Badge (live) ----
 function updateBadge() {
-  const n = painted.size, buyBtn = document.getElementById('buyBtn');
-  if (n === 0) { selBadge.classList.add('hidden'); buyBtn.disabled = true; buyBtn.textContent = 'Pick pixels to continue →'; return; }
+  const buyBtn = document.getElementById('buyBtn');
+  if (!block) {
+    selBadge.classList.add('hidden');
+    buyBtn.disabled = true; buyBtn.textContent = 'Add an image to continue →';
+    return;
+  }
+  const n = block.w * block.h;
   const price = (n * CFG.pricePerPixel / 100).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  if (!block.valid) {
+    selBadge.textContent = '⚠︎ Overlaps taken pixels — move it';
+    selBadge.classList.remove('hidden');
+    buyBtn.disabled = true; buyBtn.textContent = 'Move to a free spot';
+    return;
+  }
   selBadge.textContent = `${n.toLocaleString('en-US')} px · ${price} €`;
   selBadge.classList.remove('hidden');
   buyBtn.disabled = false; buyBtn.textContent = `Buy ${n.toLocaleString('en-US')} px · ${price} € →`;
 }
 
-// ---- Palette / Toolbar ----
-function buildPalette() {
-  const p = document.getElementById('palette');
-  PALETTE.forEach((c, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch' + (c === activeColor ? ' active' : ''); b.style.background = c; b.dataset.color = c; b.setAttribute('aria-label', 'Color ' + (i + 1)); b.onclick = () => setColor(c); p.appendChild(b); });
-  const custom = document.createElement('input'); custom.type = 'color'; custom.className = 'swatch custom'; custom.value = activeColor; custom.oninput = () => setColor(custom.value); custom.title = 'Custom color'; p.appendChild(custom);
-}
-function setColor(c) { activeColor = c; erasing = false; document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('active', s.dataset && s.dataset.color === c)); setMode('paint'); }
-function setMode(m) {
-  mode = m; erasing = (m === 'erase');
-  document.getElementById('modePaint').classList.toggle('active', m === 'paint');
-  const mv = document.getElementById('modeMove'); if (mv) mv.classList.toggle('active', m === 'move');
-  document.getElementById('modeErase').classList.toggle('active', m === 'erase');
-  const hint = document.getElementById('modeHint');
-  if (hint) hint.textContent = m === 'move' ? 'Drag to move · pinch to zoom.' : '1 finger paints · 2 fingers zoom & move.';
-}
+// ---- Toolbar ----
 function wireToolbar() {
-  document.getElementById('modePaint').onclick = () => setMode('paint');
-  const mv = document.getElementById('modeMove'); if (mv) mv.onclick = () => setMode('move');
-  document.getElementById('modeErase').onclick = () => setMode('erase');
   document.getElementById('zoomIn').onclick = () => zoomBy(1.6);
   document.getElementById('zoomOut').onclick = () => zoomBy(1 / 1.6);
-  document.getElementById('undoBtn').onclick = undo;
-  document.getElementById('clearBtn').onclick = clearAll;
   document.getElementById('buyBtn').onclick = openModal;
   document.getElementById('addImageBtn').onclick = () => document.getElementById('imgInput').click();
   document.getElementById('imgInput').onchange = onImagePicked;
-  document.getElementById('imgSize').oninput = () => { document.getElementById('imgSizeVal').textContent = document.getElementById('imgSize').value + ' px'; placeImage(); };
-  document.getElementById('imgPlaceHere').onclick = () => { imgCenter = viewCenterCell(); placeImage(); };
+  document.getElementById('imgSize').oninput = () => {
+    document.getElementById('imgSizeVal').textContent = document.getElementById('imgSize').value + ' px';
+    if (block) { const cx = block.gx + (block.w >> 1), cy = block.gy + (block.h >> 1); sizeBlock({ x: cx, y: cy }); }
+  };
   document.getElementById('imgRemove').onclick = removeImage;
   const start = document.getElementById('startBuy'); if (start) start.onclick = goToWall;
   document.getElementById('modalClose').onclick = closeModal;
   document.getElementById('buyForm').onsubmit = submitOrder;
-  setMode('paint');
 }
 function goToWall() { document.getElementById('wand').scrollIntoView({ behavior: 'smooth' }); }
 function zoomBy(f, cx, cy) {
@@ -290,66 +284,53 @@ function zoomBy(f, cx, cy) {
   clampView(); applyView(); dirty = true;
 }
 
-// ---- Gesten (1 Finger malt, 2 Finger zoom/pan IMMER) ----
+// ---- Gesten: 1 Finger auf Block = ziehen · daneben = Wand pannen · 2 Finger = zoom/pan ----
 function wireGestures() {
   wrap.addEventListener('pointerdown', onDown);
   wrap.addEventListener('pointermove', onMove, { passive: false });
   wrap.addEventListener('pointerup', onUp);
   wrap.addEventListener('pointercancel', onUp);
 }
-function targetCell(e) {
-  // Touch: Zielzelle versetzt ÜBER dem Finger (Finger verdeckt sie sonst)
-  const off = e.pointerType === 'touch' ? TOUCH_OFFSET : 0;
-  return screenToCell(e.clientX, e.clientY - off);
+function pointerOnBlock(clientX, clientY) {
+  if (!block) return false;
+  const f = screenToCellF(clientX, clientY);
+  return f.x >= block.gx && f.x < block.gx + block.w && f.y >= block.gy && f.y < block.gy + block.h;
 }
 function onDown(e) {
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   try { wrap.setPointerCapture(e.pointerId); } catch {}
-  if (pointers.size === 2) { cancelStroke(); pending = null; painting(false); gestureWasMulti = true; startPinch(); return; }
+  if (pointers.size === 2) { dragging = null; panLast = null; gestureWasMulti = true; startPinch(); return; }
   if (pointers.size > 2) return;
-  // Erster Finger
-  if (mode === 'move') { panLast = { x: e.clientX, y: e.clientY }; return; }
   gestureWasMulti = false;
-  const c = targetCell(e);
-  if (e.pointerType !== 'touch') { // Maus: sofort malen
-    beginStroke(); lastCell = c; if (c) paintCell(c.x, c.y);
-  } else { // Touch: erst Fadenkreuz, malen erst nach Schwelle (Pinch-Intent)
-    pending = { startX: e.clientX, startY: e.clientY, painting: false };
-    lastCell = c; showBrush(c);
+  if (pointerOnBlock(e.clientX, e.clientY)) {
+    const f = screenToCellF(e.clientX, e.clientY);
+    dragging = { offX: f.x - block.gx, offY: f.y - block.gy };
+  } else {
+    panLast = { x: e.clientX, y: e.clientY };
   }
 }
-function painting(v) { if (pending) pending.painting = v; }
 function onMove(e) {
   if (!pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size >= 2) { doPinch(); return; }
-  if (gestureWasMulti) return; // ein Finger noch unten nach Pinch -> nicht malen
-  if (mode === 'move') { if (panLast) { view.tx += e.clientX - panLast.x; view.ty += e.clientY - panLast.y; panLast = { x: e.clientX, y: e.clientY }; clampView(); applyView(); } return; }
+  if (gestureWasMulti) return;
   e.preventDefault();
-  const c = targetCell(e);
-  showBrush(c);
-  if (e.pointerType !== 'touch') { if (c) { paintLine(lastCell, c); lastCell = c; } return; }
-  // Touch: ab Bewegungs-Schwelle malen
-  if (pending && !pending.painting) {
-    if (Math.abs(e.clientX - pending.startX) > MOVE_THRESHOLD || Math.abs(e.clientY - pending.startY) > MOVE_THRESHOLD) {
-      pending.painting = true; beginStroke(); if (lastCell) paintCell(lastCell.x, lastCell.y);
-    }
+  if (dragging && block) {
+    const f = screenToCellF(e.clientX, e.clientY);
+    moveBlockTo(Math.round(f.x - dragging.offX), Math.round(f.y - dragging.offY));
+    return;
   }
-  if (pending && pending.painting && c) { paintLine(lastCell, c); lastCell = c; }
+  if (panLast) {
+    view.tx += e.clientX - panLast.x; view.ty += e.clientY - panLast.y;
+    panLast = { x: e.clientX, y: e.clientY }; clampView(); applyView();
+  }
 }
 function onUp(e) {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinchLast = null;
-  if (pointers.size > 0) return; // noch Finger unten
-  // alle Finger los
-  if (gestureWasMulti) { gestureWasMulti = false; pending = null; lastCell = null; panLast = null; brush.classList.add('hidden'); return; }
-  if (mode === 'move') { panLast = null; brush.classList.add('hidden'); return; }
-  if (e.pointerType !== 'touch') { endStroke(); }
-  else {
-    if (pending && !pending.painting && lastCell) { beginStroke(); paintCell(lastCell.x, lastCell.y); endStroke(); } // Tap = 1 Pixel
-    else if (pending && pending.painting) endStroke();
-  }
-  pending = null; lastCell = null; brush.classList.add('hidden');
+  if (pointers.size > 0) return;
+  if (gestureWasMulti) gestureWasMulti = false;
+  dragging = null; panLast = null;
 }
 function twoPts() { return [...pointers.values()].slice(0, 2); }
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
@@ -366,18 +347,46 @@ function doPinch() {
   pinchLast = { d, mx, my }; clampView(); applyView(); dirty = true;
 }
 
-// ---- Bounding-Box + Rasterung + Bestellung ----
-function boundingBox() { let minX = 1e9, minY = 1e9, maxX = -1, maxY = -1; for (const key of painted.keys()) { const i = key.indexOf(','); const x = +key.slice(0, i), y = +key.slice(i + 1); if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; } return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }; }
-function rasterize() { const bb = boundingBox(); const off = document.createElement('canvas'); off.width = bb.w; off.height = bb.h; const c = off.getContext('2d'); for (const [key, color] of painted) { const i = key.indexOf(','); c.fillStyle = color; c.fillRect(+key.slice(0, i) - bb.x, +key.slice(i + 1) - bb.y, 1, 1); } return new Promise((res) => off.toBlob((b) => res({ blob: b, bb }), 'image/png')); }
-function cellsPayload() { return [...painted].map(([key, color]) => { const i = key.indexOf(','); return { x: +key.slice(0, i), y: +key.slice(i + 1), c: color }; }); }
+// ---- Permalink: /?ad=<id> -> zum eigenen Block zoomen + hervorheben ----
+function handlePermalink() {
+  const id = new URLSearchParams(location.search).get('ad');
+  if (!id) return;
+  const ad = ADS.find((a) => String(a.id) === String(id));
+  if (ad && Number.isFinite(+ad.x)) focusAd(ad);
+}
+function focusAd(ad) {
+  const cxCell = +ad.x + (+ad.w) / 2, cyCell = +ad.y + (+ad.h) / 2;
+  const targetPxW = wrap.clientWidth * 0.4;
+  view.s = clamp(targetPxW / (Math.max(1, +ad.w) * cell), MIN_S, MAX_S);
+  view.tx = wrap.clientWidth / 2 - cxCell * cell * view.s;
+  view.ty = wrap.clientHeight / 2 - cyCell * cell * view.s;
+  clampView(); applyView();
+  highlight = { x: +ad.x, y: +ad.y, w: +ad.w, h: +ad.h, until: performance.now() + 4000 };
+  dirty = true;
+  goToWall();
+}
+
+// ---- Bounding-Box (= Block) + Rasterung + Bestellung ----
+function boundingBox() { return { x: block.gx, y: block.gy, w: block.w, h: block.h }; }
+function rasterize() {
+  const off = document.createElement('canvas'); off.width = block.w; off.height = block.h;
+  const c = off.getContext('2d');
+  for (let j = 0; j < block.h; j++) for (let i = 0; i < block.w; i++) { c.fillStyle = block.colors[j * block.w + i]; c.fillRect(i, j, 1, 1); }
+  return new Promise((res) => off.toBlob((b) => res({ blob: b, bb: boundingBox() }), 'image/png'));
+}
+function cellsPayload() {
+  const cells = [];
+  for (let j = 0; j < block.h; j++) for (let i = 0; i < block.w; i++) cells.push({ x: block.gx + i, y: block.gy + j, c: block.colors[j * block.w + i] });
+  return cells;
+}
 
 function openModal() {
-  if (!painted.size) return;
-  const n = painted.size, price = n * CFG.pricePerPixel / 100, min = (CFG.minOrderCents || 0) / 100;
+  if (!block || !block.valid) return;
+  const n = block.w * block.h, price = n * CFG.pricePerPixel / 100, min = (CFG.minOrderCents || 0) / 100;
   document.getElementById('selPixels').textContent = n.toLocaleString('en-US');
   document.getElementById('selPrice').textContent = price.toLocaleString('en-US', { minimumFractionDigits: 2 }) + ' €';
   const err = document.getElementById('formError'), pay = document.getElementById('payBtn');
-  if (price < min) { err.textContent = `Minimum order ${min.toFixed(2)} € – please pick more pixels.`; err.classList.remove('hidden'); pay.disabled = true; }
+  if (price < min) { err.textContent = `Minimum order ${min.toFixed(2)} € – please pick a bigger image.`; err.classList.remove('hidden'); pay.disabled = true; }
   else { err.classList.add('hidden'); pay.disabled = false; }
   document.getElementById('buyModal').classList.remove('hidden');
 }
@@ -389,11 +398,12 @@ async function submitOrder(e) {
   const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); btn.disabled = false; btn.textContent = 'Continue to payment →'; };
   err.classList.add('hidden'); btn.disabled = true; btn.textContent = 'Preparing…';
   try {
-    if (!painted.size) return fail('Please paint some pixels first.');
+    if (!block) return fail('Please add an image first.');
+    if (!computeValid()) return fail('Your block overlaps taken pixels — move it to a free spot.');
     const { blob, bb } = await rasterize();
     const fd = new FormData();
     fd.append('x', bb.x); fd.append('y', bb.y); fd.append('w', bb.w); fd.append('h', bb.h);
-    fd.append('pixels', String(painted.size));
+    fd.append('pixels', String(bb.w * bb.h));
     fd.append('cells', JSON.stringify(cellsPayload()));
     fd.append('image', blob, 'design.png');
     fd.append('link', document.getElementById('linkInput').value);
@@ -405,23 +415,32 @@ async function submitOrder(e) {
     if (!res.ok) return fail(data.error || `Error (${res.status}). Please try again.`);
     if (!data.checkoutUrl) return fail('No checkout link received. Please try again.');
     window.location.href = data.checkoutUrl;
-  } catch (e2) { fail(e2.name === 'AbortError' ? 'Upload took too long — try fewer pixels or a better connection.' : (e2.message || 'Something went wrong.')); }
+  } catch (e2) { fail(e2.name === 'AbortError' ? 'Upload took too long — try a smaller image or a better connection.' : (e2.message || 'Something went wrong.')); }
 }
 
+// ---- Rückkehr von Stripe + Share-Card ----
 function handleReturnFromStripe() {
   const p = new URLSearchParams(location.search);
-  if (p.get('success')) celebrate();
+  if (p.get('success')) celebrate(p.get('ad'));
   if (p.get('canceled')) { const adId = p.get('ad'); if (adId) fetch('/api/orders/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adId: Number(adId) }) }).then(() => loadAds()).catch(() => {}); showBanner('Payment canceled – your reserved area has been released.', 'warn'); }
   if (p.get('success') || p.get('canceled')) history.replaceState({}, '', '/');
 }
-function celebrate() {
+function celebrate(adId) {
   confettiBurst();
+  const permalink = adId ? `https://pixeleuro.de/?ad=${encodeURIComponent(adId)}` : 'https://pixeleuro.de';
   const ov = document.createElement('div'); ov.className = 'success-ov';
-  ov.innerHTML = `<div class="success-box"><img src="/logo.svg" alt="Pixi" /><h3>You're in! 🎉</h3><p>Your pixels are secured – forever on the internet. They appear on the wall after a short review.</p><button class="cta" id="shareBtn">Share 🟦</button><button class="ghost" id="successClose">To the wall</button></div>`;
+  ov.innerHTML = `<div class="success-box"><img src="/logo.svg" alt="Pixi" /><h3>You're on the wall! 🎉</h3><p>Your block is secured – forever on the internet. It appears after a short review.</p><button class="cta" id="shareBtn">Share my spot 🟦</button><button class="ghost" id="successClose">To the wall</button></div>`;
   document.body.appendChild(ov);
-  ov.querySelector('#shareBtn').onclick = sharePixel; ov.querySelector('#successClose').onclick = () => ov.remove();
+  ov.querySelector('#shareBtn').onclick = () => sharePixel(permalink, adId);
+  ov.querySelector('#successClose').onclick = () => ov.remove();
   ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
 }
-function sharePixel() { const data = { title: 'PixelEuro', text: 'I just grabbed my pixels on pixeleuro.de – forever on the internet! 🟦', url: 'https://pixeleuro.de' }; if (navigator.share) navigator.share(data).catch(() => {}); else if (navigator.clipboard) { navigator.clipboard.writeText(data.text + ' ' + data.url); alert('Link copied – now share it!'); } else window.open('https://pixeleuro.de', '_blank'); }
+function sharePixel(permalink, adId) {
+  const total = (CFG && CFG.gridW * CFG.gridH || 125000).toLocaleString('en-US');
+  const data = { title: 'PixelEuro', text: `I'm on the wall 🟦 — forever on the internet, out of ${total} pixels. Grab yours:`, url: permalink };
+  if (navigator.share) navigator.share(data).catch(() => {});
+  else if (navigator.clipboard) { navigator.clipboard.writeText(data.text + ' ' + data.url); alert('Link copied – now share it!'); }
+  else window.open(permalink, '_blank');
+}
 function confettiBurst() { const colors = ['#14c2da', '#2f6bff', '#FFCB3A', '#16a34a', '#d4537e']; for (let i = 0; i < 90; i++) { const c = document.createElement('div'); c.className = 'confetti-pc'; c.style.left = Math.random() * 100 + 'vw'; c.style.background = colors[i % colors.length]; c.style.animationDuration = (2 + Math.random() * 2) + 's'; c.style.animationDelay = (Math.random() * 0.6) + 's'; document.body.appendChild(c); setTimeout(() => c.remove(), 4200); } }
 function showBanner(text, kind) { const b = document.createElement('div'); b.className = 'banner ' + kind; b.textContent = text; document.body.prepend(b); setTimeout(() => b.remove(), 9000); }

@@ -42,20 +42,13 @@
   <!-- THE WALL = the main thing -->
   <section id="wand" class="wall-section reveal">
     <h2 class="section-title">The wall – live</h2>
-    <p class="section-sub">Paint your pixels — pinch to zoom, drag to move. 1 pixel = 1 €, yours forever.</p>
+    <p class="section-sub">Upload your image and drag it onto a free spot — pinch to zoom. You buy the whole block. 1 pixel = 1 €, forever.</p>
 
     <!-- Toolbar (neutral, scales NOT with zoom) -->
     <div class="wall-toolbar">
-      <div class="mode-switch" id="modeSwitch" role="group" aria-label="Mode">
-        <button id="modePaint" type="button" class="active">✏️ Paint</button>
-        <button id="modeMove" type="button">✋ Move</button>
-        <button id="modeErase" type="button">🧽 Erase</button>
-      </div>
-      <button id="addImageBtn" type="button" class="img-btn">🖼️ Add image</button>
+      <button id="addImageBtn" type="button" class="img-btn">🖼️ Add your image</button>
       <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
       <div class="zoom">
-        <button id="undoBtn" type="button" aria-label="Undo" title="Undo">↶</button>
-        <button id="clearBtn" type="button" aria-label="Clear" title="Clear">🗑</button>
         <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
         <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
       </div>
@@ -66,12 +59,8 @@
       <label for="imgSize">Image size</label>
       <input type="range" id="imgSize" min="8" max="120" value="32" />
       <span id="imgSizeVal">32 px</span>
-      <button id="imgPlaceHere" type="button" title="Move image to the centre of your current view">📍 Place here</button>
       <button id="imgRemove" type="button" title="Remove image">✕ Remove</button>
     </div>
-
-    <!-- Color palette -->
-    <div class="palette" id="palette" role="group" aria-label="Colors"></div>
 
     <!-- Viewport with transformed world (canvas + grid) -->
     <div class="canvas-wrap" id="canvasWrap">
@@ -83,7 +72,7 @@
     </div>
 
     <div class="wall-cta">
-      <span class="hint" id="modeHint">Tip: zoom in for precise pixel art.</span>
+      <span class="hint" id="modeHint">Tip: drag your image to a free spot · pinch to zoom.</span>
       <button class="cta" id="buyBtn" disabled>Pick pixels to continue →</button>
     </div>
   </section>
@@ -91,8 +80,8 @@
   <section id="so-gehts" class="how reveal">
     <h2 class="section-title">How it works</h2>
     <ol>
-      <li><b>Pick an area</b> – drag a rectangle on the wall. The bigger, the more it stands out.</li>
-      <li><b>Upload image & link</b> – your logo, your brand, your meme. With a click-through link.</li>
+      <li><b>Upload your image</b> – your logo, your brand, your meme.</li>
+      <li><b>Drag it to a free spot</b> – the bigger the block, the more it stands out. Add a click-through link.</li>
       <li><b>Pay securely</b> – via Stripe (card, SEPA & more). From 1 €.</li>
       <li><b>Stay forever</b> – after a short review your pixel block appears. Once bought, it stays.</li>
     </ol>
@@ -137,7 +126,7 @@
       <p class="selinfo">
         <b id="selPixels">0</b> pixels &nbsp;·&nbsp; Price: <b id="selPrice">0.00 €</b>
       </p>
-      <p class="selnote">🎨 Your painted design goes on these pixels — forever. Add a link to make them clickable.</p>
+      <p class="selnote">🖼️ Your image goes on these pixels — forever. Add a link to make them clickable.</p>
       <form id="buyForm">
         <label>Click-through link (optional)
           <input type="url" name="link" id="linkInput" placeholder="https://your-site.com" />
