@@ -290,7 +290,7 @@ app.post('/api/orders', orderLimiter, uploadImage, async (req, res) => {
         },
       }],
       customer_email: email || undefined,
-      success_url: `${CFG.publicUrl}/?success=1`,
+      success_url: `${CFG.publicUrl}/?success=1&ad=${adId}`,
       cancel_url: `${CFG.publicUrl}/?canceled=1&ad=${adId}`,
       metadata: { adId: String(adId) },
     });
