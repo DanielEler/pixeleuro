@@ -51,12 +51,23 @@
         <button id="modeMove" type="button">✋ Move</button>
         <button id="modeErase" type="button">🧽 Erase</button>
       </div>
+      <button id="addImageBtn" type="button" class="img-btn">🖼️ Add image</button>
+      <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
       <div class="zoom">
         <button id="undoBtn" type="button" aria-label="Undo" title="Undo">↶</button>
         <button id="clearBtn" type="button" aria-label="Clear" title="Clear">🗑</button>
         <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
         <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
       </div>
+    </div>
+
+    <!-- Image controls (shown after an image is added) -->
+    <div class="img-bar hidden" id="imgBar">
+      <label for="imgSize">Image size</label>
+      <input type="range" id="imgSize" min="8" max="120" value="32" />
+      <span id="imgSizeVal">32 px</span>
+      <button id="imgPlaceHere" type="button" title="Move image to the centre of your current view">📍 Place here</button>
+      <button id="imgRemove" type="button" title="Remove image">✕ Remove</button>
     </div>
 
     <!-- Color palette -->

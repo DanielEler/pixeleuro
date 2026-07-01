@@ -40,6 +40,14 @@ let gestureWasMulti = false;  // sobald 2 Finger -> kein Malen bis alle los
 let occMask = null;           // Uint8 Belegt-Maske (O(1))
 let dirty = true;
 
+// Bild-Upload: das Bild wird clientseitig auf das Pixelraster heruntergerechnet
+// und landet als Farben in `painted` — hochgeladen wird nur das winzige Pixel-PNG,
+// nie die große Originaldatei (deshalb sind MB kein Thema fürs Backend).
+let imgBitmap = null;         // geladenes Bild
+let imgCenter = null;         // {x,y} Zielzelle = Bildmitte
+let imgCells = [];            // von diesem Bild gesetzte painted-Keys (Ersetzen/Entfernen)
+const MAX_IMG_BYTES = 20 * 1024 * 1024; // Rohdatei-Obergrenze (nur Client, gegen Browser-Überlast)
+
 init();
 
 async function init() {
@@ -178,7 +186,56 @@ function cancelStroke() { // verwerfen ohne Commit (z. B. wenn Pinch erkannt)
   if (stroke) { for (let i = stroke.length - 1; i >= 0; i--) { const { key, prev } = stroke[i]; if (prev === null) painted.delete(key); else painted.set(key, prev); } stroke = null; dirty = true; updateBadge(); }
 }
 function undo() { const s = undoStack.pop(); if (!s) return; for (let i = s.length - 1; i >= 0; i--) { const { key, prev } = s[i]; if (prev === null) painted.delete(key); else painted.set(key, prev); } dirty = true; updateBadge(); }
-function clearAll() { if (!painted.size) return; undoStack.push([...painted].map(([key, c]) => ({ key, prev: c }))); painted.clear(); dirty = true; updateBadge(); }
+function clearAll() { if (!painted.size) return; undoStack.push([...painted].map(([key, c]) => ({ key, prev: c }))); painted.clear(); resetImageState(); dirty = true; updateBadge(); }
+
+// ---- Bild-Upload -> Pixel ----
+function viewCenterCell() {
+  const r = wrap.getBoundingClientRect();
+  return screenToCell(r.left + r.width / 2, r.top + r.height / 2) || { x: (CFG.gridW / 2) | 0, y: (CFG.gridH / 2) | 0 };
+}
+function resetImageState() {
+  imgCells = []; imgBitmap = null; imgCenter = null;
+  const ib = document.getElementById('imgBar'); if (ib) ib.classList.add('hidden');
+}
+async function onImagePicked(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';                                   // erneutes Wählen derselben Datei erlauben
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { showBanner('Please choose an image file.', 'warn'); return; }
+  if (file.size > MAX_IMG_BYTES) { showBanner('Image too large (max 20 MB). Please pick a smaller file.', 'warn'); return; }
+  try { imgBitmap = await createImageBitmap(file); }
+  catch { showBanner('Could not read that image.', 'warn'); return; }
+  imgCenter = viewCenterCell();
+  document.getElementById('imgBar').classList.remove('hidden');
+  placeImage();
+}
+function removeImage() { for (const key of imgCells) painted.delete(key); resetImageState(); dirty = true; updateBadge(); }
+function rgbToHex(r, g, b) { return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
+function placeImage() {
+  if (!imgBitmap || !imgCenter) return;
+  for (const key of imgCells) painted.delete(key);          // altes Bild ersetzen
+  imgCells = [];
+  const longest = Math.max(8, Math.min(120, +document.getElementById('imgSize').value || 44));
+  const ar = imgBitmap.width / imgBitmap.height;
+  let w = ar >= 1 ? longest : Math.round(longest * ar);
+  let h = ar >= 1 ? Math.round(longest / ar) : longest;
+  w = Math.max(1, Math.min(CFG.gridW, w)); h = Math.max(1, Math.min(CFG.gridH, h));
+  const off = document.createElement('canvas'); off.width = w; off.height = h;
+  const c = off.getContext('2d'); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+  c.drawImage(imgBitmap, 0, 0, w, h);
+  const data = c.getImageData(0, 0, w, h).data;
+  const ox = imgCenter.x - (w >> 1), oy = imgCenter.y - (h >> 1);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const p = (j * w + i) * 4;
+    if (data[p + 3] < 128) continue;                        // transparent -> überspringen
+    const gx = ox + i, gy = oy + j;
+    if (gx < 0 || gy < 0 || gx >= CFG.gridW || gy >= CFG.gridH || occupied(gx, gy)) continue;
+    const key = gx + ',' + gy;
+    painted.set(key, rgbToHex(data[p], data[p + 1], data[p + 2]));
+    imgCells.push(key);
+  }
+  dirty = true; updateBadge();
+}
 
 // ---- Preis-Badge (live) ----
 function updateBadge() {
@@ -214,6 +271,11 @@ function wireToolbar() {
   document.getElementById('undoBtn').onclick = undo;
   document.getElementById('clearBtn').onclick = clearAll;
   document.getElementById('buyBtn').onclick = openModal;
+  document.getElementById('addImageBtn').onclick = () => document.getElementById('imgInput').click();
+  document.getElementById('imgInput').onchange = onImagePicked;
+  document.getElementById('imgSize').oninput = () => { document.getElementById('imgSizeVal').textContent = document.getElementById('imgSize').value + ' px'; placeImage(); };
+  document.getElementById('imgPlaceHere').onclick = () => { imgCenter = viewCenterCell(); placeImage(); };
+  document.getElementById('imgRemove').onclick = removeImage;
   const start = document.getElementById('startBuy'); if (start) start.onclick = goToWall;
   document.getElementById('modalClose').onclick = closeModal;
   document.getElementById('buyForm').onsubmit = submitOrder;
