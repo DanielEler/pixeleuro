@@ -59,6 +59,7 @@ async function init() {
   wireToolbar();
   wireGestures();
   handlePermalink();
+  updateBadge();                 // korrekter Anfangstext ("Add an image to continue")
   requestAnimationFrame(renderLoop);
 
   window.addEventListener('resize', onResize);
