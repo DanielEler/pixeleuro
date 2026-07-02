@@ -9,116 +9,59 @@
   <meta property="og:description" content="Grab your piece of the pixel wall before it's sold out forever." />
   <meta property="og:type" content="website" />
   <link rel="icon" href="/logo.svg" type="image/svg+xml" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
-  <noscript><style>.reveal{opacity:1!important;transform:none!important}</style></noscript>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><img src="/logo.svg" alt="PixelEuro" /><span id="siteName">PixelEuro</span></div>
-    <nav>
-      <button class="nav-cta" onclick="document.getElementById('startBuy').click()">Get your pixel →</button>
-    </nav>
-  </header>
-
-  <!-- Compact hero -->
-  <section class="hero reveal">
-    <span class="pill"><span class="livedot"></span> Live now – the wall is still almost empty</span>
-    <img class="logo-big" src="/logo.svg" alt="PixelEuro logo" />
-    <h1>Buy your piece of the internet.<br /><span class="accent">1 pixel = 1 €. Forever.</span></h1>
-    <p class="sub" id="tagline">Grab your spot on the pixel wall – before it's sold out for good.</p>
-    <div class="stats">
-      <div class="stat"><b id="soldCount">–</b><span>pixels sold</span></div>
-      <div class="stat"><b id="freeCount">–</b><span>still free</span></div>
-      <div class="stat"><b id="pricePer">1&nbsp;€</b><span>per pixel</span></div>
+  <!-- Old-school banner: title + live counter (the whole page IS the wall) -->
+  <header id="banner">
+    <div class="banner-inner">
+      <img class="banner-logo" src="/logo.svg" alt="PixelEuro" />
+      <div class="banner-title">
+        <h1><span id="siteName">PixelEuro</span></h1>
+        <p class="banner-tag">1 pixel = <span id="pricePer">1&nbsp;€</span> &middot; <span class="blink">●</span> forever on the internet</p>
+      </div>
+      <div class="counter">
+        <span><b id="soldCount">–</b> sold</span>
+        <span><b id="freeCount">–</b> free</span>
+        <span class="of">/ 125,000</span>
+      </div>
     </div>
     <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-    <button class="cta" id="startBuy">Grab your spot →</button>
-    <p class="microtrust">Secure payment via Stripe · from 1 € · pay once, stay forever</p>
-  </section>
+  </header>
 
-  <!-- THE WALL = the main thing -->
-  <section id="wand" class="wall-section reveal">
-    <h2 class="section-title">The wall – live</h2>
-    <p class="section-sub">Upload your image and drag it onto a free spot — pinch to zoom. You buy the whole block. 1 pixel = 1 €, forever.</p>
-
-    <!-- Toolbar (neutral, scales NOT with zoom) -->
-    <div class="wall-toolbar">
-      <button id="addImageBtn" type="button" class="img-btn">🖼️ Add your image</button>
-      <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-      <div class="zoom">
-        <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
-        <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
-      </div>
-    </div>
-
-    <!-- Image controls (shown after an image is added) -->
+  <!-- Toolbar -->
+  <div class="wall-toolbar">
+    <button id="addImageBtn" type="button" class="retro-btn primary">🖼️ Add your image</button>
+    <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
     <div class="img-bar hidden" id="imgBar">
-      <label for="imgSize">Image size</label>
+      <label for="imgSize">Size</label>
       <input type="range" id="imgSize" min="8" max="120" value="32" />
       <span id="imgSizeVal">32 px</span>
-      <button id="imgRemove" type="button" title="Remove image">✕ Remove</button>
+      <button id="imgRemove" type="button" class="retro-btn">✕ Remove</button>
     </div>
+    <div class="zoom">
+      <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+      <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+    </div>
+    <button class="retro-btn buy" id="buyBtn" disabled>Add an image to continue →</button>
+  </div>
 
-    <!-- Viewport with transformed world (canvas + grid) -->
+  <!-- THE WALL = full-width, edge to edge -->
+  <main id="wand">
     <div class="canvas-wrap" id="canvasWrap">
-      <div id="world">
-        <canvas id="grid"></canvas>
-      </div>
+      <div id="world"><canvas id="grid"></canvas></div>
       <div id="selBadge" class="sel-badge hidden"></div>
-      <div id="tooltip" class="tooltip hidden"></div>
     </div>
-
-    <div class="wall-cta">
-      <span class="hint" id="modeHint">Tip: drag your image to a free spot · pinch to zoom.</span>
-      <button class="cta" id="buyBtn" disabled>Pick pixels to continue →</button>
-    </div>
-  </section>
-
-  <section id="so-gehts" class="how reveal">
-    <h2 class="section-title">How it works</h2>
-    <ol>
-      <li><b>Upload your image</b> – your logo, your brand, your meme.</li>
-      <li><b>Drag it to a free spot</b> – the bigger the block, the more it stands out. Add a click-through link.</li>
-      <li><b>Pay securely</b> – via Stripe (card, SEPA & more). From 1 €.</li>
-      <li><b>Stay forever</b> – after a short review your pixel block appears. Once bought, it stays.</li>
-    </ol>
-  </section>
-
-  <section class="reverse reveal">
-    <h2 class="section-title">Don't buy a pixel here if…</h2>
-    <ul class="reverse-list">
-      <li>…you don't care whether your name is still on the internet in 10 years.</li>
-      <li>…you'd rather watch others grab the best spots.</li>
-      <li>…<b>1 euro</b> is too much for something that never disappears again.</li>
-    </ul>
-    <p class="reverse-flip">Everyone else: the wall is filling up right now. Grab the spot that exists only <b>once</b>.</p>
-    <button class="cta" onclick="document.getElementById('startBuy').click()">Get your pixel →</button>
-  </section>
-
-  <section class="faq reveal">
-    <h2 class="section-title">Short & honest</h2>
-    <details><summary>Is this for real?</summary><p>Yes. Payment runs through Stripe, and after a short review your image goes permanently on the wall – visible to everyone who visits pixeleuro.de.</p></details>
-    <details><summary>What does it cost me?</summary><p>1 € per pixel, from a single pixel. One-time – no subscription, no hidden costs.</p></details>
-    <details><summary>What can I upload?</summary><p>Your logo, your brand, an image with a link. Offensive or illegal content is rejected before approval.</p></details>
-    <details><summary>Does it really stay forever?</summary><p>As long as PixelEuro is online – and that's exactly the plan. No expiry date, no renewal needed.</p></details>
-  </section>
-
-  <section class="finalcta reveal">
-    <h2>The wall will never get bigger.</h2>
-    <p>125,000 pixels. Once your spot is gone, it's gone – forever.</p>
-    <button class="cta cta-lg" onclick="document.getElementById('startBuy').click()">Grab your pixel now →</button>
-  </section>
+  </main>
 
   <footer class="footer">
     <a href="/legal/impressum.html">Imprint</a> ·
     <a href="/legal/datenschutz.html">Privacy</a> ·
-    <a href="/legal/agb.html">Terms</a>
-    <p>© <span id="year"></span> PixelEuro</p>
+    <a href="/legal/agb.html">Terms</a> ·
+    © <span id="year"></span> PixelEuro · drag your image onto a free spot &amp; grab your pixels
   </footer>
 
+  <!-- Buy modal -->
   <div class="modal hidden" id="buyModal">
     <div class="modal-box">
       <button class="modal-close" id="modalClose">✕</button>
@@ -126,7 +69,6 @@
       <p class="selinfo">
         <b id="selPixels">0</b> pixels &nbsp;·&nbsp; Price: <b id="selPrice">0.00 €</b>
       </p>
-      <p class="selnote">🖼️ Your image goes on these pixels — forever. Add a link to make them clickable.</p>
       <form id="buyForm">
         <label>Click-through link (optional)
           <input type="url" name="link" id="linkInput" placeholder="https://your-site.com" />
@@ -148,12 +90,6 @@
     </div>
   </div>
 
-  <script>
-    addEventListener('DOMContentLoaded', () => {
-      const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
-      document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-    });
-  </script>
   <script src="/app.js"></script>
 </body>
 </html>
