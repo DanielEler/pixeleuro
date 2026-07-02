@@ -12,21 +12,21 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <!-- Old-school banner: title + live counter (the whole page IS the wall) -->
-  <header id="banner">
-    <div class="banner-inner">
-      <img class="banner-logo" src="/logo.svg" alt="PixelEuro" />
-      <div class="banner-title">
-        <h1><span id="siteName">PixelEuro</span></h1>
-        <p class="banner-tag">1 pixel = <span id="pricePer">1&nbsp;€</span> &middot; <span class="blink">●</span> forever on the internet</p>
-      </div>
-      <div class="counter">
-        <span><b id="soldCount">–</b> sold</span>
-        <span><b id="freeCount">–</b> free</span>
-        <span class="of">/ 125,000</span>
-      </div>
+  <!-- Masthead: title + tagline + pipe-nav + counter (Million-Dollar-Homepage style) -->
+  <header id="masthead">
+    <div class="mast-inner">
+      <img class="mast-logo" src="/logo.svg" alt="PixelEuro" />
+      <h1 id="siteName">PixelEuro</h1>
+      <p class="tagline">125,000 pixels &middot; <span id="pricePer">1&nbsp;€</span> per pixel &middot; <b>Own a piece of internet history!</b></p>
+      <nav class="pipenav">
+        <a href="#wand">Buy&nbsp;Pixels</a> |
+        <a href="/legal/impressum.html">Imprint</a> |
+        <a href="/legal/datenschutz.html">Privacy</a> |
+        <a href="/legal/agb.html">Terms</a>
+      </nav>
+      <p class="counter"><b id="soldCount">–</b> of 125,000 pixels sold &middot; <b id="freeCount">–</b> still free</p>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
     </div>
-    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
   </header>
 
   <!-- Toolbar -->
@@ -46,7 +46,7 @@
     <button class="retro-btn buy" id="buyBtn" disabled>Add an image to continue →</button>
   </div>
 
-  <!-- THE WALL = full-width, edge to edge -->
+  <!-- THE WALL = centered, bordered grid (the hero) -->
   <main id="wand">
     <div class="canvas-wrap" id="canvasWrap">
       <div id="world"><canvas id="grid"></canvas></div>
@@ -55,10 +55,10 @@
   </main>
 
   <footer class="footer">
+    PixelEuro © <span id="year"></span> &middot; drag your image onto a free spot &amp; grab your pixels &middot;
     <a href="/legal/impressum.html">Imprint</a> ·
     <a href="/legal/datenschutz.html">Privacy</a> ·
-    <a href="/legal/agb.html">Terms</a> ·
-    © <span id="year"></span> PixelEuro · drag your image onto a free spot &amp; grab your pixels
+    <a href="/legal/agb.html">Terms</a>
   </footer>
 
   <!-- Buy modal -->
