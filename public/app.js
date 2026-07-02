@@ -191,7 +191,8 @@ async function onImagePicked(e) {
   block = { bitmap, w: 0, h: 0, gx: 0, gy: 0, colors: [], valid: false };
   document.getElementById('imgBar').classList.remove('hidden');
   sizeBlock(viewCenterCell());
-  showBanner('Drag your image to a free spot, then hit buy.', 'ok');
+  focusBlock();                 // gleich auf den Block zoomen -> sofort groß & scharf sichtbar
+  showBanner('Drag your image to a free spot · use the size slider to make it bigger.', 'ok');
 }
 function removeImage() { resetBlock(); dirty = true; updateBadge(); }
 
@@ -199,7 +200,7 @@ function removeImage() { resetBlock(); dirty = true; updateBadge(); }
 // zentriert auf `center`. Transparente Pixel -> Weiß (der ganze Block wird gekauft).
 function sizeBlock(center) {
   if (!block) return;
-  const longest = clamp(+document.getElementById('imgSize').value || 32, 8, Math.min(CFG.gridW, CFG.gridH));
+  const longest = clamp(+document.getElementById('imgSize').value || 48, 1, Math.min(CFG.gridW, CFG.gridH));
   const ar = block.bitmap.width / block.bitmap.height;
   let w = ar >= 1 ? longest : Math.round(longest * ar);
   let h = ar >= 1 ? Math.round(longest / ar) : longest;
@@ -365,6 +366,18 @@ function focusAd(ad) {
   highlight = { x: +ad.x, y: +ad.y, w: +ad.w, h: +ad.h, until: performance.now() + 4000 };
   dirty = true;
   goToWall();
+}
+
+// Nach dem Upload auf den Block zoomen, damit er groß & scharf sichtbar ist
+// (sonst ist er in der Gesamtansicht der Wand winzig / schlecht erkennbar).
+function focusBlock() {
+  if (!block) return;
+  const cxCell = block.gx + block.w / 2, cyCell = block.gy + block.h / 2;
+  const targetPxW = wrap.clientWidth * 0.5;               // Block ~50% der Viewport-Breite
+  view.s = clamp(targetPxW / (Math.max(1, block.w) * cell), Math.max(4, MIN_S), MAX_S);
+  view.tx = wrap.clientWidth / 2 - cxCell * cell * view.s;
+  view.ty = wrap.clientHeight / 2 - cyCell * cell * view.s;
+  clampView(); applyView(); dirty = true;
 }
 
 // ---- Bounding-Box (= Block) + Rasterung + Bestellung ----
